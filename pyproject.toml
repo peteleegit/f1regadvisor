@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "f1regadvisor"
+version = "0.1.0"
+description = "F1 Regulatory Risk Memo — Multi-Agent System"
+requires-python = ">=3.11"
+dependencies = [
+    "anthropic>=0.40",
+    "streamlit>=1.40.0",
+    "pydantic>=2.7.0",
+    "pydantic-settings>=2.3.0",
+    "weasyprint>=62.0",
+    "markdown>=3.6",
+    "truststore>=0.9.0",
+    "pdfplumber>=0.11.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.2.0",
+    "pytest-asyncio>=0.23.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["f1reg"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
