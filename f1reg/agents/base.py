@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import threading
+from collections.abc import Generator
 from typing import Any
 
 import anthropic
@@ -61,6 +62,23 @@ class BaseAgent:
         return "".join(
             b.text for b in response.content if hasattr(b, "text")
         )
+
+    def _stream(
+        self,
+        system: str,
+        messages: list[dict[str, Any]],
+        *,
+        model: str | None = None,
+        max_tokens: int | None = None,
+    ) -> Generator[str, None, None]:
+        """Yield raw text chunks from a streaming API call."""
+        with self.client.messages.stream(
+            model=model or self.model,
+            max_tokens=max_tokens or self.max_tokens,
+            system=system,
+            messages=messages,
+        ) as stream:
+            yield from stream.text_stream
 
     def _call_with_web_search(
         self,

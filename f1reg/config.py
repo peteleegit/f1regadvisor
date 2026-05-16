@@ -13,9 +13,6 @@ WEB_SEARCH_DOMAINS = [
     "motorsport.com",
     "the-race.com",
     "racefans.net",
-    # Informed community discourse
-    "reddit.com/r/formula1",
-    "reddit.com/r/f1technical",
     # Insider commentary (lower reliability — agents instructed to label accordingly)
     "x.com",
 ]

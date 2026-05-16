@@ -30,6 +30,26 @@ class ConceptDecomposition(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Phase 1 — Regulatory Text Agent and Precedent Agent outputs
+# ---------------------------------------------------------------------------
+
+class RegulatoryTextOutput(BaseModel):
+    summary: str
+    controlling_articles: list[str] = []
+    key_definitions: list[str] = []
+    cross_references: list[str] = []
+    gaps: list[str] = []
+
+
+class PrecedentOutput(BaseModel):
+    summary: str
+    comparable_cases: list[str] = []
+    analogous_cases: list[str] = []
+    distinctions: list[str] = []
+    gaps: list[str] = []
+
+
+# ---------------------------------------------------------------------------
 # Phase 2 — Debate
 # ---------------------------------------------------------------------------
 
@@ -69,6 +89,8 @@ class MemoContext:
     precedent_hits: list = field(default_factory=list)
     regulatory_summary: Optional[str] = None
     precedent_summary: Optional[str] = None
+    regulatory_text_output: Optional[RegulatoryTextOutput] = None
+    precedent_output: Optional[PrecedentOutput] = None
 
     # Phase 2 — debate + political economy (runs alongside Round 2)
     debate_rounds: list[DebateRound] = field(default_factory=list)
@@ -80,6 +102,7 @@ class MemoContext:
     # Phase 3 — procedural strategy
     mitigations: Optional[str] = None
     recommended_action: Optional[str] = None
+    recommended_action_rationale: Optional[str] = None
 
     # Phase 4 — evidence audit
     audit_findings: list[AuditFinding] = field(default_factory=list)
@@ -89,6 +112,8 @@ class MemoContext:
     arguments_against: Optional[str] = None
     bottom_line_verdict: Optional[str] = None
     bottom_line_confidence: Optional[str] = None
+    bottom_line_summary: Optional[str] = None
+    political_risk_summary: Optional[str] = None
     open_questions: Optional[str] = None
 
     # Final assembled memo (Markdown)

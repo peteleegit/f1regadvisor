@@ -87,10 +87,57 @@ tca = _get_tca()
 # ---------------------------------------------------------------------------
 # Session state initialisation
 # ---------------------------------------------------------------------------
+_PHASE2_KEYS = (
+    "ph2_r1_done", "ph2_r2_done",
+    "ph2_r3_checked", "ph2_r3_needs", "ph2_r3_done",
+    "ph2_protest_done",
+)
+_PHASE345_KEYS = ("phase345_done",)
+
+
 def _reset() -> None:
     for key in ("phase", "ctx", "tca_messages", "display_messages",
-                "uploaded_text", "question_count"):
+                "uploaded_text", "question_count",
+                "phase1_done", "phase2_done") + _PHASE2_KEYS + _PHASE345_KEYS:
         st.session_state.pop(key, None)
+
+
+def _stream_into(gen, placeholder) -> str:
+    """Consume a text-chunk generator, streaming into an st.empty() placeholder.
+
+    Returns the full accumulated text.
+    """
+    text = ""
+    for chunk in gen:
+        text += chunk
+        placeholder.markdown(text + " ▌")
+    placeholder.markdown(text)
+    return text
+
+
+def _debate_columns(round_num: int):
+    """Create two-column debate layout. Returns (sk_ph, col2).
+
+    sk_ph is an st.empty() in col1 for streaming the Skeptic's text.
+    col2 is the column context for the caller to use with st.spinner / st.markdown.
+    """
+    st.markdown(f"**Round {round_num}**")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.caption("FIA Skeptic / Prosecutor")
+        sk_ph = st.empty()
+    with col2:
+        st.caption("Liberal Construction / Defence")
+    return sk_ph, col2
+
+
+def _pdf_bytes(html: str) -> bytes:
+    """Render HTML to PDF bytes using xhtml2pdf (pure-Python, no native deps)."""
+    import io
+    from xhtml2pdf import pisa
+    buf = io.BytesIO()
+    pisa.CreatePDF(html, dest=buf, encoding="utf-8")
+    return buf.getvalue()
 
 
 if "phase" not in st.session_state:
@@ -243,7 +290,7 @@ if st.session_state.phase == "intake":
 
 
 # ---------------------------------------------------------------------------
-# Phase: running — pipeline progress display
+# Phase: running — Phase 1 execution and results display
 # ---------------------------------------------------------------------------
 elif st.session_state.phase == "running":
     ctx: MemoContext = st.session_state.ctx
@@ -252,7 +299,6 @@ elif st.session_state.phase == "running":
     st.subheader("Assessment in progress")
     st.markdown(f"> {concept.summary}")
 
-    # Show conversation so the user remembers what was asked
     with st.expander("Concept intake conversation", expanded=False):
         for msg in st.session_state.display_messages:
             with st.chat_message(msg["role"]):
@@ -260,36 +306,250 @@ elif st.session_state.phase == "running":
 
     st.divider()
 
-    # Placeholder for pipeline phases 1-5
-    # This block will be replaced as each phase is implemented.
-    st.info(
-        "**Pipeline phases 1–5 are under construction.**\n\n"
-        "The concept decomposition below has been captured and will drive the "
-        "full multi-agent analysis once the remaining agents are implemented.\n\n"
-        "Phase 0 (Technical Concept Agent) is complete."
-    )
+    # ------------------------------------------------------------------
+    # Run Phase 1 if not already done
+    # ------------------------------------------------------------------
+    if not st.session_state.get("phase1_done"):
+        from f1reg.pipeline.phase1 import run_phase1
 
-    st.subheader("Concept decomposition")
-    fields = {
-        "Season": concept.season,
-        "Component": concept.component,
-        "System": concept.system,
-        "Operating condition": concept.operating_condition,
-        "Driver input": concept.driver_input,
-        "Software behaviour": concept.software_behaviour,
-        "Aerodynamic effect": concept.aerodynamic_effect,
-        "Event type": concept.event_type,
-        "Test condition": concept.test_condition,
-        "Visibility to rivals": concept.visibility_to_rivals,
-        "Cost-cap implications": concept.cost_cap_implications,
-    }
-    for label, value in fields.items():
-        if value:
-            st.markdown(f"**{label}:** {value}")
+        with st.status("Running regulatory analysis...", expanded=True) as _status:
+            def _progress(msg: str) -> None:
+                st.write(msg)
 
-    st.subheader("Regulatory search queries")
-    for q in concept.regulatory_queries:
-        st.markdown(f"- {q}")
+            try:
+                run_phase1(ctx, progress_callback=_progress)
+                st.session_state.ctx = ctx
+                st.session_state.phase1_done = True
+                _status.update(label="Phase 1 complete", state="complete", expanded=False)
+            except Exception as _err:
+                _status.update(label=f"Phase 1 failed: {_err}", state="error")
+                st.stop()
+
+    # ------------------------------------------------------------------
+    # Display Phase 1 results
+    # ------------------------------------------------------------------
+    if ctx.regulatory_summary:
+        with st.expander("Regulatory Analysis", expanded=True):
+            st.markdown(ctx.regulatory_summary)
+
+            rto = ctx.regulatory_text_output
+            if rto and rto.controlling_articles:
+                st.markdown("**Controlling articles:**")
+                for a in rto.controlling_articles:
+                    st.markdown(f"- {a}")
+            if rto and rto.key_definitions:
+                st.markdown("**Key definitions:**")
+                for d in rto.key_definitions:
+                    st.markdown(f"- {d}")
+            if rto and rto.gaps:
+                st.markdown("**Regulatory gaps:**")
+                for g in rto.gaps:
+                    st.markdown(f"- {g}")
+
+    if ctx.precedent_summary:
+        with st.expander("Precedent Analysis", expanded=True):
+            st.markdown(ctx.precedent_summary)
+
+            po = ctx.precedent_output
+            if po and po.comparable_cases:
+                st.markdown("**Comparable cases:**")
+                for c in po.comparable_cases:
+                    st.markdown(f"- {c}")
+            if po and po.analogous_cases:
+                st.markdown("**Analogous cases:**")
+                for c in po.analogous_cases:
+                    st.markdown(f"- {c}")
+            if po and po.gaps:
+                st.markdown("**Precedent gaps:**")
+                for g in po.gaps:
+                    st.markdown(f"- {g}")
+
+    # ------------------------------------------------------------------
+    # Phase 2 — progressive streaming debate
+    # ------------------------------------------------------------------
+    if st.session_state.get("phase1_done"):
+        from f1reg.pipeline.phase2 import build_phase1_context, should_run_round3
+        from f1reg.agents.debate import FIASkepticAgent, LiberalConstructionAgent
+        from f1reg.agents.political_economy import PoliticalEconomyAgent
+        from f1reg.agents.rival_protest import RivalProtestAgent
+        from f1reg.context import DebateRound
+        from concurrent.futures import ThreadPoolExecutor
+
+        st.subheader("Adversarial Debate")
+        phase1_ctx = build_phase1_context(ctx)
+        concept = ctx.concept.summary
+
+        # ---- Round 1 ----
+        sk1_ph, r1_col2 = _debate_columns(1)
+
+        if not st.session_state.get("ph2_r1_done"):
+            try:
+                skeptic = FIASkepticAgent()
+                defence = LiberalConstructionAgent()
+                with r1_col2:
+                    with st.spinner("Analysing..."):
+                        with ThreadPoolExecutor(max_workers=1) as _pool:
+                            _df_f = _pool.submit(defence.argue, concept, phase1_ctx)
+                            _sk1 = _stream_into(skeptic.stream_argue(concept, phase1_ctx), sk1_ph)
+                            _df1 = _df_f.result()
+                    st.markdown(_df1)
+                ctx.debate_rounds.append(DebateRound(1, _sk1, _df1))
+                st.session_state.ctx = ctx
+                st.session_state.ph2_r1_done = True
+            except Exception as _err:
+                st.error(f"Round 1 failed: {_err}")
+                st.stop()
+        else:
+            _r = ctx.debate_rounds[0]
+            sk1_ph.markdown(_r.skeptic_argument)
+            with r1_col2:
+                st.markdown(_r.defense_argument)
+
+        st.divider()
+
+        # ---- Round 2 + Political Economy ----
+        if st.session_state.get("ph2_r1_done"):
+            sk2_ph, r2_col2 = _debate_columns(2)
+            st.markdown("**Political Economy Analysis**")
+            pe_ph = st.empty()
+
+            if not st.session_state.get("ph2_r2_done"):
+                try:
+                    _sk1 = ctx.debate_rounds[0].skeptic_argument
+                    _df1 = ctx.debate_rounds[0].defense_argument
+                    skeptic = FIASkepticAgent()
+                    defence = LiberalConstructionAgent()
+                    with r2_col2:
+                        with st.spinner("Analysing..."):
+                            with ThreadPoolExecutor(max_workers=2) as _pool:
+                                _df2_f = _pool.submit(defence.rebut, concept, phase1_ctx, _df1, _sk1)
+                                _pe_f = _pool.submit(PoliticalEconomyAgent().analyse, concept, phase1_ctx)
+                                _sk2 = _stream_into(
+                                    skeptic.stream_rebut(concept, phase1_ctx, _sk1, _df1), sk2_ph
+                                )
+                                _df2 = _df2_f.result()
+                                _pe = _pe_f.result()
+                        st.markdown(_df2)
+                    pe_ph.markdown(_pe)
+                    ctx.debate_rounds.append(DebateRound(2, _sk2, _df2))
+                    ctx.political_economy_analysis = _pe
+                    st.session_state.ctx = ctx
+                    st.session_state.ph2_r2_done = True
+                except Exception as _err:
+                    st.error(f"Round 2 failed: {_err}")
+                    st.stop()
+            else:
+                _r = ctx.debate_rounds[1]
+                sk2_ph.markdown(_r.skeptic_argument)
+                with r2_col2:
+                    st.markdown(_r.defense_argument)
+                pe_ph.markdown(ctx.political_economy_analysis or "")
+
+            st.divider()
+
+            # ---- Round 3 (optional) ----
+            if st.session_state.get("ph2_r2_done"):
+                if not st.session_state.get("ph2_r3_checked"):
+                    with st.spinner("Checking whether a third debate round is warranted..."):
+                        _needs_r3 = should_run_round3(ctx)
+                    st.session_state.ph2_r3_needs = _needs_r3
+                    st.session_state.ph2_r3_checked = True
+                else:
+                    _needs_r3 = st.session_state.get("ph2_r3_needs", False)
+
+                if _needs_r3:
+                    sk3_ph, r3_col2 = _debate_columns(3)
+
+                    if not st.session_state.get("ph2_r3_done"):
+                        try:
+                            _transcript = ctx.debate_transcript()
+                            skeptic = FIASkepticAgent()
+                            defence = LiberalConstructionAgent()
+                            with r3_col2:
+                                with st.spinner("Analysing..."):
+                                    with ThreadPoolExecutor(max_workers=1) as _pool:
+                                        _df3_f = _pool.submit(
+                                            defence.final_rebuttal, concept, phase1_ctx, _transcript
+                                        )
+                                        _sk3 = _stream_into(
+                                            skeptic.stream_final_rebuttal(
+                                                concept, phase1_ctx, _transcript
+                                            ),
+                                            sk3_ph,
+                                        )
+                                        _df3 = _df3_f.result()
+                                st.markdown(_df3)
+                            ctx.debate_rounds.append(DebateRound(3, _sk3, _df3))
+                            st.session_state.ctx = ctx
+                            st.session_state.ph2_r3_done = True
+                        except Exception as _err:
+                            st.error(f"Round 3 failed: {_err}")
+                            st.stop()
+                    else:
+                        _r = ctx.debate_rounds[2]
+                        sk3_ph.markdown(_r.skeptic_argument)
+                        with r3_col2:
+                            st.markdown(_r.defense_argument)
+
+                    st.divider()
+
+                # ---- Phase 2.5 — Rival Protest ----
+                _r3_done = not _needs_r3 or st.session_state.get("ph2_r3_done")
+                if _r3_done:
+                    st.subheader("Rival Protest Simulation")
+
+                    if not st.session_state.get("ph2_protest_done"):
+                        try:
+                            _transcript = ctx.debate_transcript()
+                            with st.spinner(
+                                "Simulating rival team legal challenge "
+                                "(searching web for recent context)..."
+                            ):
+                                _protest = RivalProtestAgent().analyse(
+                                    concept, phase1_ctx, _transcript
+                                )
+                            ctx.rival_protest_analysis = _protest
+                            st.session_state.ctx = ctx
+                            st.session_state.ph2_protest_done = True
+                            st.session_state.phase2_done = True
+                            st.rerun()  # flush rival protest content before Phase 3-4-5 starts
+                        except Exception as _err:
+                            st.error(f"Rival Protest agent failed: {_err}")
+                            st.stop()
+                    else:
+                        st.markdown(ctx.rival_protest_analysis or "")
+
+                    st.divider()
+
+                    # ---- Phase 3-4-5 ----
+                    if not st.session_state.get("phase345_done"):
+                        from f1reg.pipeline.phase345 import run_phase345
+
+                        with st.status(
+                            "Completing analysis — strategy, audit, and verdict...",
+                            expanded=True,
+                        ) as _s345:
+                            try:
+                                run_phase345(
+                                    ctx,
+                                    progress_callback=lambda msg: st.write(msg),
+                                )
+                                st.session_state.ctx = ctx
+                                st.session_state.phase345_done = True
+                                _s345.update(
+                                    label="Analysis complete — memo ready",
+                                    state="complete",
+                                    expanded=False,
+                                )
+                            except Exception as _err:
+                                _s345.update(
+                                    label=f"Phase 3-5 failed: {_err}", state="error"
+                                )
+                                st.stop()
+
+                    if st.session_state.get("phase345_done"):
+                        st.session_state.phase = "complete"
+                        st.rerun()
 
     if st.button("Start new assessment", type="primary"):
         _reset()
@@ -303,32 +563,42 @@ elif st.session_state.phase == "complete":
     ctx: MemoContext = st.session_state.ctx
 
     if ctx.memo_markdown:
-        st.markdown(ctx.memo_markdown)
-
-        # PDF download
+        # PDF download button at the top so it's immediately visible
         try:
             import markdown as md_lib
-            import weasyprint
-            html_body = md_lib.markdown(ctx.memo_markdown, extensions=["tables", "fenced_code"])
-            html = f"""<!DOCTYPE html>
+            _html_body = md_lib.markdown(
+                ctx.memo_markdown, extensions=["tables", "fenced_code"]
+            )
+            _html = f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8">
 <style>
-  body {{ font-family: Georgia, serif; max-width: 900px; margin: 40px auto;
-         font-size: 13px; line-height: 1.6; color: #111; }}
-  h1 {{ font-size: 20px; }} h2 {{ font-size: 16px; border-bottom: 1px solid #ccc; }}
-  h3 {{ font-size: 14px; }} blockquote {{ color: #555; border-left: 3px solid #ccc;
-  padding-left: 12px; }} code {{ background: #f4f4f4; padding: 1px 4px; }}
-</style></head><body>{html_body}</body></html>"""
-            pdf_bytes = weasyprint.HTML(string=html).write_pdf()
+  body {{ font-family: Georgia, serif; margin: 48px 56px;
+         font-size: 13px; line-height: 1.65; color: #111; }}
+  h1 {{ font-size: 20px; border-bottom: 2px solid #333; padding-bottom: 4px; }}
+  h2 {{ font-size: 14px; border-bottom: 1px solid #ccc; margin-top: 24px; }}
+  h3 {{ font-size: 13px; margin-top: 16px; }}
+  blockquote {{ color: #444; border-left: 4px solid #c00; padding-left: 12px;
+                background: #fff8f8; margin: 10px 0; }}
+  code {{ background: #f4f4f4; padding: 1px 4px; font-size: 11px; }}
+  hr {{ border-top: 1px solid #ddd; margin: 20px 0; }}
+  ul {{ padding-left: 18px; }}
+  li {{ margin-bottom: 3px; }}
+  em {{ color: #555; }}
+</style></head><body>{_html_body}</body></html>"""
+            _pdf_data = _pdf_bytes(_html)
             st.download_button(
                 "Download memo as PDF",
-                data=pdf_bytes,
+                data=_pdf_data,
                 file_name="risk_memo.pdf",
                 mime="application/pdf",
+                type="primary",
             )
-        except Exception as e:
-            st.caption(f"PDF generation unavailable: {e}")
+        except Exception as _pdf_err:
+            st.caption(f"PDF generation unavailable: {_pdf_err}")
 
-    if st.button("Start new assessment", type="primary"):
+        st.divider()
+        st.markdown(ctx.memo_markdown)
+
+    if st.button("Start new assessment", use_container_width=True):
         _reset()
         st.rerun()

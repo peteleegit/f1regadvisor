@@ -192,9 +192,6 @@ Anthropic built-in `web_search_20250305` tool. Restricted to credible domains:
 **Primary (press and official):**
 `fia.com`, `formula1.com`, `autosport.com`, `motorsport.com`, `the-race.com`, `racefans.net`
 
-**Community (informed discourse):**
-`reddit.com/r/formula1`, `reddit.com/r/f1technical`
-
 **Insider commentary (lower reliability — label accordingly):**
 `x.com`
 
