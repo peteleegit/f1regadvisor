@@ -1,0 +1,220 @@
+# F1RegAdvisor — System Design
+
+## Purpose
+
+F1RegAdvisor is a multi-agent AI system that takes a regulatory question, concept description, or new idea as input and produces a structured risk memo to help an expert (technical director, legal counsel, senior engineer) assess whether to proceed, modify, escalate, seek FIA clarification, or stop.
+
+It is built on top of the FIARulerPro regulatory knowledge substrate, which provides hybrid retrieval over a corpus of ~3,200 FIA documents. F1RegAdvisor adds adversarial multi-agent reasoning, a structured advocacy debate, and a synthesised risk verdict.
+
+---
+
+## Relationship to FIARulerPro
+
+FIARulerPro is a conservative regulatory Q&A tool — it answers "what do the rules say?" and is deliberately cautious about conclusions it cannot source.
+
+F1RegAdvisor uses FIARulerPro's **retrieval substrate** only (`retrieve_precedents()`, `retrieve()` from `substrate.retrieval.retriever`) and builds its own synthesis layer with agents that are permitted to argue, advocate, and speculate — clearly labelled as such.
+
+FIARulerPro's synthesis layer (`answer_question()`, `stream_synthesis()`) is not used by F1RegAdvisor.
+
+---
+
+## The Risk Memo
+
+Every run produces a structured memo with the following sections:
+
+| # | Section | Description |
+|---|---|---|
+| 1 | **Relevant rule text** | Controlling clauses, definitions, appendices, and directives — what the rules literally say |
+| 2 | **Relevant precedent** | Comparable decisions, enforcement history, and distinctions — how the rules have actually been applied |
+| 3 | **Technical facts that matter** | Which aspects of the concept determine the legal outcome |
+| 4 | **Arguments for legality** | Strongest constructor-favourable interpretation; labelled as advocacy |
+| 5 | **Arguments against legality** | Strongest FIA/rival-team challenge; labelled as advocacy |
+| 6 | **Political, protest, and media risk** | FIA political dynamics, rival team protest likelihood and framing, media and public reaction |
+| 7 | **Mitigations** | Design changes, operating constraints, documentation strategy, testing approach, clarification path |
+| 8 | **Bottom line** | Verdict (likely permitted / likely prohibited / ambiguous / high-risk grey area / requires FIA clarification) with confidence qualifier (e.g. "Likely permitted — moderate confidence") |
+| 9 | **Recommended next action** | Proceed / modify / escalate / seek clarification / prepare defence / stop |
+| 10 | **Open questions** | Missing facts, stale sources, unresolved ambiguities, items requiring human review |
+| A | **Appendix — Debate transcript** | Full record of the FIA Skeptic vs. Liberal Construction debate, all rounds |
+
+---
+
+## Agents
+
+### Phase 0 — Intake (interactive)
+
+**Technical Concept Agent**
+- Runs before the pipeline starts, in a conversational loop with the user
+- Identifies what is missing or ambiguous in the user's description
+- May ask for clarification or request a document upload (design sketch, slide, internal brief)
+- Produces a structured `ConceptDecomposition`: component, system, operating condition, driver input, software behaviour, aerodynamic effect, event type, test condition, visibility to rivals, cost-cap implications, and the regulatory query strings used for retrieval
+- The concept decomposition is shared with every downstream agent
+
+### Phase 1 — Evidence gathering (parallel)
+
+**Regulatory Text Agent**
+- Calls `retrieve_precedents()` from the FIARulerPro substrate with focus on regulation hits
+- Answers: "What do the rules literally say?"
+- Does not speculate; cites sources only
+
+**Precedent and Practice Agent**
+- Calls `retrieve_precedents()` with focus on Stewards decisions, infringement notices, summonses, appeals, and right-of-review outcomes
+- Answers: "How has this actually been enforced in practice?"
+- Notes enforcement history, distinctions from past cases, and gaps where there is no precedent
+
+### Phase 2 — Adversarial debate
+
+**Round 1 (parallel):**
+
+**FIA Skeptic / Prosecutor Agent**
+- Builds the strongest argument that the concept violates the rules, violates the intent of the rules, threatens safety, undermines competitive fairness, or should be restricted by clarification
+- Permitted to argue beyond what retrieved text strictly supports, but must label inferences as such
+
+**Liberal Construction / Defence Agent**
+- Builds the strongest argument in favour of legality, engineering freedom, consistency with prior application, and the broader value of innovation and competition
+- Same labelling rule for inferences
+
+**Round 2 (parallel):**
+Each agent reads the other's Round 1 and responds — specifically targeting the weakest points in the opposing argument. Neither agent sees its own Round 2 opponent's Round 2 (only Round 1).
+
+**Round 3 (optional):**
+The orchestrator decides whether genuine unresolved contention warrants a final rebuttal round. Not mandatory.
+
+**Political Economy Agent ("James") — runs during Round 2, independently:**
+- Assesses paddock dynamics, FIA incentives, competitive-balance concerns, recent regulatory sensitivities
+- Evaluates whether the concept is likely to trigger a corrective rule change or clarification
+- Has access to web search (see domains below)
+- Named "James" in the UI
+
+### Phase 2.5 — External challenge simulation
+
+**Rival Protest Agent**
+- Sees the full debate transcript (all rounds) before producing its output
+- Simulates how a rival team would challenge the concept
+- Covers: likely protest theories, technical framing they would use, which elements of the Skeptic's argument they would cite, and the media narrative they would construct
+- Has access to web search
+
+### Phase 3 — Strategy
+
+**Procedural Strategy Agent**
+- Sees all Phase 1 and Phase 2 outputs
+- Recommends mitigations: design changes, operating constraints, documentation, testing strategy, clarification path
+- Recommends next action: proceed / modify / escalate / seek clarification / prepare defence / stop
+
+### Phase 4 — Quality control
+
+**Evidence Auditor**
+- Reviews the full draft memo
+- Checks: conclusions supported by sources; outdated rules not mixed with current rules; public reporting not treated as authority; speculation labelled as such; cross-agent consistency
+- Outputs structured findings with severity (HIGH / LOW)
+- HIGH severity: triggers a single targeted revision of the implicated agent (with the critique as context); revised output replaces the original
+- LOW severity: appended to the Open questions section
+- Maximum one revision pass per agent — no infinite loops
+- Uses a more capable model (claude-opus-4-7) for deeper cross-agent reasoning
+
+### Phase 5 — Synthesis (orchestrator)
+
+- Reads all agent outputs
+- Synthesises the Bottom line verdict and confidence qualifier
+- Assembles the final memo in section order
+- Appends the full debate transcript
+- Uses claude-opus-4-7 for the verdict synthesis
+
+---
+
+## Execution Order
+
+```
+Phase 0     Technical Concept Agent (interactive; may run multiple turns)
+               │
+               ▼
+Phase 1     Regulatory Text Agent ──┐  (parallel)
+            Precedent Agent ────────┘
+               │
+               ▼
+Phase 2     Skeptic Round 1 ────────┐  (parallel)
+            Defence Round 1 ────────┤
+            Political Economy ──────┘
+               │
+               ▼
+Phase 2     Skeptic Round 2 ────────┐  (parallel; each reads opponent Round 1)
+            Defence Round 2 ────────┘
+               │
+               ▼
+Phase 2     Round 3 (optional — orchestrator decides)
+               │
+               ▼
+Phase 2.5   Rival Protest Agent (sees full debate transcript)
+               │
+               ▼
+Phase 3     Procedural Strategy Agent
+               │
+               ▼
+Phase 4     Evidence Auditor (+ targeted revisions if needed)
+               │
+               ▼
+Phase 5     Bottom line synthesis → final memo assembly
+```
+
+Wall-clock estimate: **3–6 minutes** (most phases are parallel; sequential depth is five levels).
+
+---
+
+## Technical Decisions
+
+### Orchestration
+Raw Anthropic async SDK (`anthropic.AsyncAnthropic`) + `asyncio.gather()` for parallel phases. No framework (not LangGraph, not CrewAI). The pipeline is well-defined enough that a framework adds abstraction without payoff.
+
+### Interface
+Streamlit with `st.chat_message` / `st.chat_input` for Phase 0 (the Technical Concept Agent is conversational). Progress display shows phase completion as each stage finishes and streams the debate transcript live. The final memo renders as Markdown in Streamlit with a PDF download button.
+
+### PDF generation
+`weasyprint` — pure Python, converts styled HTML to PDF. The Markdown memo is converted to HTML with a clean stylesheet, rendered to PDF bytes, served via `st.download_button`.
+
+### FIARulerPro substrate connection
+Direct Python import via editable install:
+```bash
+pip install -e ../FIARulerPro
+```
+F1RegAdvisor configures its own path to `fiaruler.db` via `F1REG_FIARULER_DB_URL` and calls `build_engine()` directly — it does not inherit FIARulerPro's environment variables.
+
+Agents call `retrieve_precedents()` from `substrate.retrieval.retriever` and use `regulation_hits` / `precedent_hits` directly. They do not use FIARulerPro's synthesis prompts.
+
+### Models
+
+| Agent | Model |
+|---|---|
+| Technical Concept, Regulatory Text, Precedent, Skeptic, Defence, Rival Protest, Political Economy, Procedural Strategy | `claude-sonnet-4-6` |
+| Evidence Auditor, Bottom line synthesis | `claude-opus-4-7` |
+
+### Web search
+Anthropic built-in `web_search_20250305` tool. Restricted to credible domains:
+
+**Primary (press and official):**
+`fia.com`, `formula1.com`, `autosport.com`, `motorsport.com`, `the-race.com`, `racefans.net`
+
+**Community (informed discourse):**
+`reddit.com/r/formula1`, `reddit.com/r/f1technical`
+
+**Insider commentary (lower reliability — label accordingly):**
+`x.com`
+
+### Shared state
+A `MemoContext` dataclass accumulates agent outputs as the pipeline progresses. Every agent receives the full context and writes its output into it. This is the single source of truth for the pipeline run.
+
+### Season default
+If the user does not specify a season, assume the current season (2026 at time of writing; read from config so it can be updated without code changes).
+
+### Deployment
+Local only for initial development and testing. Railway deployment (matching FIARulerPro's pattern: Dockerfile, persistent volume, GitHub Releases for DB) is planned but deferred until the system is working locally.
+
+---
+
+## Deferred / Future Work
+
+- Railway deployment (Dockerfile, start script, volume for DB)
+- Email delivery option (background processing + PDF attachment via SendGrid or similar) — relevant if memo generation time exceeds ~5 minutes in practice
+- Authentication (currently no login gate during local development)
+- Memo versioning / history (store past memos for a given concept; track how the risk assessment changes as regulations evolve)
+- Batch mode (assess a set of concepts overnight, produce a report)
+- Integration with FIARulerPro's query log for shared feedback tracking
+- Fine-grained source filtering (e.g. restrict retrieval to specific document types for a given question)
