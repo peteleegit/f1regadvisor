@@ -49,7 +49,7 @@ def _retrieve_via_api(
             f"{api_url}/retrieve",
             json=payload,
             headers=headers,
-            timeout=120.0,
+            timeout=180.0,
         )
     except httpx.ConnectError as exc:
         raise RuntimeError(
@@ -58,7 +58,7 @@ def _retrieve_via_api(
         ) from exc
     except httpx.TimeoutException as exc:
         raise RuntimeError(
-            f"FIARulerPro /retrieve timed out after 120 s ({api_url})."
+            f"FIARulerPro /retrieve timed out after 180 s ({api_url})."
         ) from exc
 
     if resp.status_code == 401:
