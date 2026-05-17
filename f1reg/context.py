@@ -124,11 +124,17 @@ class MemoContext:
     # ---------------------------------------------------------------------------
 
     def debate_transcript(self) -> str:
+        _labels = {
+            1: "Round 1: Opening Statements",
+            2: "Round 2: Rebuttals",
+            3: "Round 3: Closing Statements",
+        }
         if not self.debate_rounds:
             return ""
         lines: list[str] = []
         for r in self.debate_rounds:
-            lines.append(f"### Round {r.round_number}")
+            label = _labels.get(r.round_number, f"Round {r.round_number}")
+            lines.append(f"### {label}")
             lines.append(f"**FIA Skeptic:**\n{r.skeptic_argument}")
             lines.append(f"**Liberal Construction / Defence:**\n{r.defense_argument}")
         return "\n\n".join(lines)

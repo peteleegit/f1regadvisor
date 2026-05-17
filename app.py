@@ -115,13 +115,20 @@ def _stream_into(gen, placeholder) -> str:
     return text
 
 
+_ROUND_LABELS = {
+    1: "Round 1: Opening Statements",
+    2: "Round 2: Rebuttals",
+    3: "Round 3: Closing Statements",
+}
+
+
 def _debate_columns(round_num: int):
     """Create two-column debate layout. Returns (sk_ph, col2).
 
     sk_ph is an st.empty() in col1 for streaming the Skeptic's text.
     col2 is the column context for the caller to use with st.spinner / st.markdown.
     """
-    st.markdown(f"**Round {round_num}**")
+    st.markdown(f"**{_ROUND_LABELS.get(round_num, f'Round {round_num}')}**")
     col1, col2 = st.columns(2)
     with col1:
         st.caption("FIA Skeptic / Prosecutor")
@@ -130,14 +137,6 @@ def _debate_columns(round_num: int):
         st.caption("Liberal Construction / Defence")
     return sk_ph, col2
 
-
-def _pdf_bytes(html: str) -> bytes:
-    """Render HTML to PDF bytes using xhtml2pdf (pure-Python, no native deps)."""
-    import io
-    from xhtml2pdf import pisa
-    buf = io.BytesIO()
-    pisa.CreatePDF(html, dest=buf, encoding="utf-8")
-    return buf.getvalue()
 
 
 if "phase" not in st.session_state:
@@ -410,10 +409,9 @@ elif st.session_state.phase == "running":
         # ---- Round 2 + Political Economy ----
         if st.session_state.get("ph2_r1_done"):
             sk2_ph, r2_col2 = _debate_columns(2)
-            st.markdown("**Political Economy Analysis**")
-            pe_ph = st.empty()
 
             if not st.session_state.get("ph2_r2_done"):
+                pe_ph = st.empty()
                 try:
                     _sk1 = ctx.debate_rounds[0].skeptic_argument
                     _df1 = ctx.debate_rounds[0].defense_argument
@@ -443,7 +441,8 @@ elif st.session_state.phase == "running":
                 sk2_ph.markdown(_r.skeptic_argument)
                 with r2_col2:
                     st.markdown(_r.defense_argument)
-                pe_ph.markdown(ctx.political_economy_analysis or "")
+                st.markdown("**Political Economy Analysis**")
+                st.markdown(ctx.political_economy_analysis or "")
 
             st.divider()
 
@@ -493,63 +492,59 @@ elif st.session_state.phase == "running":
 
                     st.divider()
 
-                # ---- Phase 2.5 — Rival Protest ----
+                # ---- Phase 2.5 — Rival Protest (agent runner only) ----
                 _r3_done = not _needs_r3 or st.session_state.get("ph2_r3_done")
-                if _r3_done:
-                    st.subheader("Rival Protest Simulation")
-
-                    if not st.session_state.get("ph2_protest_done"):
-                        try:
-                            _transcript = ctx.debate_transcript()
-                            with st.spinner(
-                                "Simulating rival team legal challenge "
-                                "(searching web for recent context)..."
-                            ):
-                                _protest = RivalProtestAgent().analyse(
-                                    concept, phase1_ctx, _transcript
-                                )
-                            ctx.rival_protest_analysis = _protest
-                            st.session_state.ctx = ctx
-                            st.session_state.ph2_protest_done = True
-                            st.session_state.phase2_done = True
-                            st.rerun()  # flush rival protest content before Phase 3-4-5 starts
-                        except Exception as _err:
-                            st.error(f"Rival Protest agent failed: {_err}")
-                            st.stop()
-                    else:
-                        st.markdown(ctx.rival_protest_analysis or "")
-
-                    st.divider()
-
-                    # ---- Phase 3-4-5 ----
-                    if not st.session_state.get("phase345_done"):
-                        from f1reg.pipeline.phase345 import run_phase345
-
-                        with st.status(
-                            "Completing analysis — strategy, audit, and verdict...",
-                            expanded=True,
-                        ) as _s345:
-                            try:
-                                run_phase345(
-                                    ctx,
-                                    progress_callback=lambda msg: st.write(msg),
-                                )
-                                st.session_state.ctx = ctx
-                                st.session_state.phase345_done = True
-                                _s345.update(
-                                    label="Analysis complete — memo ready",
-                                    state="complete",
-                                    expanded=False,
-                                )
-                            except Exception as _err:
-                                _s345.update(
-                                    label=f"Phase 3-5 failed: {_err}", state="error"
-                                )
-                                st.stop()
-
-                    if st.session_state.get("phase345_done"):
-                        st.session_state.phase = "complete"
+                if _r3_done and not st.session_state.get("ph2_protest_done"):
+                    try:
+                        _transcript = ctx.debate_transcript()
+                        with st.spinner(
+                            "Simulating rival team legal challenge "
+                            "(searching web for recent context)..."
+                        ):
+                            _protest = RivalProtestAgent().analyse(
+                                concept, phase1_ctx, _transcript
+                            )
+                        ctx.rival_protest_analysis = _protest
+                        st.session_state.ctx = ctx
+                        st.session_state.ph2_protest_done = True
+                        st.session_state.phase2_done = True
                         st.rerun()
+                    except Exception as _err:
+                        st.error(f"Rival Protest agent failed: {_err}")
+                        st.stop()
+
+    # ------------------------------------------------------------------
+    # Phase 3-4-5 — runs after rival protest completes
+    # ------------------------------------------------------------------
+    if st.session_state.get("ph2_protest_done"):
+        if not st.session_state.get("phase345_done"):
+            from f1reg.pipeline.phase345 import run_phase345
+
+            with st.status(
+                "Completing analysis — strategy, audit, and verdict...",
+                expanded=True,
+            ) as _s345:
+                try:
+                    run_phase345(
+                        ctx,
+                        progress_callback=lambda msg: st.write(msg),
+                    )
+                    st.session_state.ctx = ctx
+                    st.session_state.phase345_done = True
+                    _s345.update(
+                        label="Analysis complete — memo ready",
+                        state="complete",
+                        expanded=False,
+                    )
+                except Exception as _err:
+                    _s345.update(
+                        label=f"Phase 3-5 failed: {_err}", state="error"
+                    )
+                    st.stop()
+
+        if st.session_state.get("phase345_done"):
+            st.session_state.phase = "complete"
+            st.rerun()
 
     if st.button("Start new assessment", type="primary"):
         _reset()
@@ -563,38 +558,22 @@ elif st.session_state.phase == "complete":
     ctx: MemoContext = st.session_state.ctx
 
     if ctx.memo_markdown:
-        # PDF download button at the top so it's immediately visible
+        # Word download button at the top so it's immediately visible
         try:
-            import markdown as md_lib
-            _html_body = md_lib.markdown(
-                ctx.memo_markdown, extensions=["tables", "fenced_code"]
-            )
-            _html = f"""<!DOCTYPE html>
-<html><head><meta charset="utf-8">
-<style>
-  body {{ font-family: Georgia, serif; margin: 48px 56px;
-         font-size: 13px; line-height: 1.65; color: #111; }}
-  h1 {{ font-size: 20px; border-bottom: 2px solid #333; padding-bottom: 4px; }}
-  h2 {{ font-size: 14px; border-bottom: 1px solid #ccc; margin-top: 24px; }}
-  h3 {{ font-size: 13px; margin-top: 16px; }}
-  blockquote {{ color: #444; border-left: 4px solid #c00; padding-left: 12px;
-                background: #fff8f8; margin: 10px 0; }}
-  code {{ background: #f4f4f4; padding: 1px 4px; font-size: 11px; }}
-  hr {{ border-top: 1px solid #ddd; margin: 20px 0; }}
-  ul {{ padding-left: 18px; }}
-  li {{ margin-bottom: 3px; }}
-  em {{ color: #555; }}
-</style></head><body>{_html_body}</body></html>"""
-            _pdf_data = _pdf_bytes(_html)
+            import re as _re
+            from f1reg.memo.docx_renderer import build_memo_docx
+            _docx_data = build_memo_docx(ctx)
+            _slug = _re.sub(r"[^a-z0-9]+", "_", ctx.concept.summary.lower())[:40].strip("_")
+            _docx_name = f"f1_memo_{_slug}_{ctx.concept.season}.docx"
             st.download_button(
-                "Download memo as PDF",
-                data=_pdf_data,
-                file_name="risk_memo.pdf",
-                mime="application/pdf",
+                "Download memo as Word (.docx)",
+                data=_docx_data,
+                file_name=_docx_name,
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                 type="primary",
             )
-        except Exception as _pdf_err:
-            st.caption(f"PDF generation unavailable: {_pdf_err}")
+        except Exception as _docx_err:
+            st.caption(f"Word export unavailable: {_docx_err}")
 
         st.divider()
         st.markdown(ctx.memo_markdown)
