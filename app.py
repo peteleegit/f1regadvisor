@@ -10,8 +10,9 @@ Requires .streamlit/secrets.toml:
     [anthropic]
     api_key = "sk-ant-..."
 
-    [substrate]
-    db_url = "sqlite:///C:/path/to/FIARulerPro/fiaruler.db"
+    [fiaruler]
+    api_url = "http://fiarulerpr.railway.internal:8000"
+    api_key = "your-retrieve-api-key"
 """
 from __future__ import annotations
 

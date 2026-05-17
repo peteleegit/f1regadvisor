@@ -19,7 +19,8 @@ WEB_SEARCH_DOMAINS = [
 
 
 class Settings(BaseSettings):
-    fiaruler_db_url: str = "sqlite:///./fiaruler.db"
+    fiaruler_api_url: str = "http://localhost:8000"
+    fiaruler_api_key: str = ""
 
     primary_model: str = "claude-sonnet-4-6"
     senior_model: str = "claude-opus-4-7"
@@ -50,13 +51,23 @@ def configure_api_key() -> None:
         pass
 
 
-def get_fiaruler_db_url() -> str:
-    """Return the FIARulerPro DB URL from Streamlit secrets or settings."""
+def get_fiaruler_api_url() -> str:
     try:
         import streamlit as st
-        url = st.secrets["substrate"]["db_url"]
+        url = st.secrets["fiaruler"]["api_url"]
         if url:
             return url
     except Exception:
         pass
-    return settings.fiaruler_db_url
+    return settings.fiaruler_api_url
+
+
+def get_fiaruler_api_key() -> str:
+    try:
+        import streamlit as st
+        key = st.secrets["fiaruler"]["api_key"]
+        if key:
+            return key
+    except Exception:
+        pass
+    return settings.fiaruler_api_key
