@@ -26,7 +26,8 @@ and adversarial debate, you recommend specific mitigations and a clear course of
 
 Be specific and actionable. Generic advice ("consult lawyers") is not useful. \
 Each mitigation should identify a concrete design change, operating constraint, \
-documentation step, or procedural action.
+documentation step, or procedural action. List 3–5 mitigations maximum, \
+prioritised by regulatory impact. Do not pad with obvious or generic steps.
 
 RECOMMENDED ACTION must be exactly one of:
 {chr(10).join(f"  - {o}" for o in _ACTION_OPTIONS)}

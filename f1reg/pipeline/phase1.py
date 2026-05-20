@@ -145,6 +145,21 @@ def run_phase1(
     reg_hits, prec_hits = _retrieve_via_api(
         ctx.concept, regulation_limit=rl, precedent_limit=pl
     )
+
+    # Expansion hits (rrf_score=0.0) bypass the regulation_limit cap on the
+    # FIARulerPro side. With 5-6 queries and active graph expansion the total
+    # can reach 50-60 articles, which is too much for agent synthesis.
+    # Cap to 15 total: scored hits keep their ranked order; expansion hits are
+    # sorted by authority and trimmed to fill the remainder.
+    _MAX_REG_HITS = 15
+    if len(reg_hits) > _MAX_REG_HITS:
+        scored = [h for h in reg_hits if h.get("rrf_score", 0) > 0]
+        expansion = sorted(
+            [h for h in reg_hits if h.get("rrf_score", 0) == 0],
+            key=lambda h: -h.get("authority_score", 0),
+        )
+        reg_hits = (scored + expansion)[:_MAX_REG_HITS]
+
     ctx.regulation_hits = reg_hits
     ctx.precedent_hits = prec_hits
     regulation_text = _build_regulation_text(reg_hits)

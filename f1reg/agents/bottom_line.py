@@ -34,7 +34,7 @@ ABSOLUTE RULES — violating these makes the memo useless:
 2. political_risk_summary: THREE SENTENCES MAXIMUM. Cover: rival protest likelihood, \
    FIA political dynamics, and media/public exposure.
 3. arguments_for and arguments_against: 3-5 bullets each. Each bullet ≤ 20 words.
-4. open_questions: genuine unresolved issues only — not summaries of what was covered.
+4. open_questions: 3 items maximum. Genuine unresolved issues only — not summaries of what was covered. If there are no genuine open questions, return an empty list.
 
 VERDICT (choose exactly one):
 {chr(10).join(f"  {v}" for v in _VERDICTS)}

@@ -17,7 +17,10 @@ Requires .streamlit/secrets.toml:
 from __future__ import annotations
 
 import io
+import secrets
 import sys
+import threading
+import time
 from pathlib import Path
 
 import streamlit as st
@@ -35,9 +38,44 @@ st.set_page_config(
 
 
 # ---------------------------------------------------------------------------
+# Server-side session store — survives WebSocket reconnects via URL token
+# ---------------------------------------------------------------------------
+_sessions: dict[str, float] = {}   # token → issue timestamp
+_sessions_lock = threading.Lock()
+_SESSION_TTL = 8 * 3600            # 8 hours
+
+
+def _issue_session() -> str:
+    token = secrets.token_hex(16)
+    with _sessions_lock:
+        _sessions[token] = time.time()
+    return token
+
+
+def _valid_session(token: str | None) -> bool:
+    if not token:
+        return False
+    with _sessions_lock:
+        ts = _sessions.get(token)
+    return ts is not None and time.time() - ts < _SESSION_TTL
+
+
+def _revoke_session(token: str | None) -> None:
+    if token:
+        with _sessions_lock:
+            _sessions.pop(token, None)
+
+
+# ---------------------------------------------------------------------------
 # Auth gate
 # ---------------------------------------------------------------------------
 def _check_password() -> bool:
+    # URL token takes priority — allows seamless reconnect after WebSocket drop.
+    url_token = st.query_params.get("sid")
+    if _valid_session(url_token):
+        st.session_state.authenticated = True
+        return True
+
     if st.session_state.get("authenticated"):
         return True
 
@@ -55,6 +93,8 @@ def _check_password() -> bool:
         except Exception:
             expected = None
         if expected and pw == expected:
+            token = _issue_session()
+            st.query_params["sid"] = token
             st.session_state.authenticated = True
             st.rerun()
         else:
@@ -190,6 +230,8 @@ be reviewed by a qualified expert before any regulatory decision is made.
 
     st.divider()
     if st.button("Sign out", use_container_width=True):
+        _revoke_session(st.query_params.get("sid"))
+        st.query_params.clear()
         st.session_state.clear()
         st.rerun()
 
