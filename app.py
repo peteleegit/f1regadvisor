@@ -40,30 +40,37 @@ st.set_page_config(
 # ---------------------------------------------------------------------------
 # Server-side session store — survives WebSocket reconnects via URL token
 # ---------------------------------------------------------------------------
-_sessions: dict[str, float] = {}   # token → issue timestamp
-_sessions_lock = threading.Lock()
 _SESSION_TTL = 8 * 3600            # 8 hours
+
+
+@st.cache_resource
+def _get_session_store() -> tuple[dict[str, float], threading.Lock]:
+    # cache_resource persists across hot-reloads, so tokens survive file saves
+    return {}, threading.Lock()
 
 
 def _issue_session() -> str:
     token = secrets.token_hex(16)
-    with _sessions_lock:
-        _sessions[token] = time.time()
+    sessions, lock = _get_session_store()
+    with lock:
+        sessions[token] = time.time()
     return token
 
 
 def _valid_session(token: str | None) -> bool:
     if not token:
         return False
-    with _sessions_lock:
-        ts = _sessions.get(token)
+    sessions, lock = _get_session_store()
+    with lock:
+        ts = sessions.get(token)
     return ts is not None and time.time() - ts < _SESSION_TTL
 
 
 def _revoke_session(token: str | None) -> None:
     if token:
-        with _sessions_lock:
-            _sessions.pop(token, None)
+        sessions, lock = _get_session_store()
+        with lock:
+            sessions.pop(token, None)
 
 
 # ---------------------------------------------------------------------------
