@@ -12,9 +12,9 @@ It is built on top of the FIARulerPro regulatory knowledge substrate, which prov
 
 FIARulerPro is a conservative regulatory Q&A tool — it answers "what do the rules say?" and is deliberately cautious about conclusions it cannot source.
 
-F1RegAdvisor uses FIARulerPro's **retrieval substrate** only (`retrieve_precedents()`, `retrieve()` from `substrate.retrieval.retriever`) and builds its own synthesis layer with agents that are permitted to argue, advocate, and speculate — clearly labelled as such.
+F1RegAdvisor uses FIARulerPro's **retrieval layer** only, via its HTTP `/retrieve` endpoint, and builds its own synthesis layer with agents that are permitted to argue, advocate, and speculate — clearly labelled as such.
 
-FIARulerPro's synthesis layer (`answer_question()`, `stream_synthesis()`) is not used by F1RegAdvisor.
+FIARulerPro's synthesis layer is not used by F1RegAdvisor. The two services are deployed independently; F1RegAdvisor calls FIARulerPro over the network rather than importing its Python package directly.
 
 ---
 
@@ -52,12 +52,12 @@ Every run produces a structured memo with the following sections:
 ### Phase 1 — Evidence gathering (parallel)
 
 **Regulatory Text Agent**
-- Calls `retrieve_precedents()` from the FIARulerPro substrate with focus on regulation hits
+- Receives the `regulation_hits` returned from the Phase 1 HTTP retrieval call
 - Answers: "What do the rules literally say?"
 - Does not speculate; cites sources only
 
 **Precedent and Practice Agent**
-- Calls `retrieve_precedents()` with focus on Stewards decisions, infringement notices, summonses, appeals, and right-of-review outcomes
+- Receives the `precedent_hits` returned from the Phase 1 HTTP retrieval call (Stewards decisions, infringement notices, summonses, appeals, right-of-review outcomes)
 - Answers: "How has this actually been enforced in practice?"
 - Notes enforcement history, distinctions from past cases, and gaps where there is no precedent
 
@@ -165,19 +165,20 @@ Wall-clock estimate: **3–6 minutes** (most phases are parallel; sequential dep
 Raw Anthropic async SDK (`anthropic.AsyncAnthropic`) + `asyncio.gather()` for parallel phases. No framework (not LangGraph, not CrewAI). The pipeline is well-defined enough that a framework adds abstraction without payoff.
 
 ### Interface
-Streamlit with `st.chat_message` / `st.chat_input` for Phase 0 (the Technical Concept Agent is conversational). Progress display shows phase completion as each stage finishes and streams the debate transcript live. The final memo renders as Markdown in Streamlit with a PDF download button.
+Streamlit with `st.chat_message` / `st.chat_input` for Phase 0 (the Technical Concept Agent is conversational). Progress display shows phase completion as each stage finishes and streams the debate transcript live. The final memo renders as Markdown in Streamlit with a Word document download button.
 
-### PDF generation
-`weasyprint` — pure Python, converts styled HTML to PDF. The Markdown memo is converted to HTML with a clean stylesheet, rendered to PDF bytes, served via `st.download_button`.
+### Word document generation
+`python-docx` — the assembled `memo_markdown` is rendered into a structured `.docx` file, served via `st.download_button`. Users can edit and annotate the document before sending to counsel.
 
 ### FIARulerPro substrate connection
-Direct Python import via editable install:
-```bash
-pip install -e ../FIARulerPro
+HTTP POST to the FIARulerPro `/retrieve` endpoint via `httpx`:
 ```
-F1RegAdvisor configures its own path to `fiaruler.db` via `F1REG_FIARULER_DB_URL` and calls `build_engine()` directly — it does not inherit FIARulerPro's environment variables.
+POST {F1REG_FIARULER_API_URL}/retrieve
+Authorization: Bearer {F1REG_FIARULER_API_KEY}
+```
+F1RegAdvisor has no dependency on the FIARulerPro Python package. The two services are deployed independently; locally, FIARulerPro must be running before starting F1RegAdvisor. On Railway, both run as separate services in the same project and communicate over the private network.
 
-Agents call `retrieve_precedents()` from `substrate.retrieval.retriever` and use `regulation_hits` / `precedent_hits` directly. They do not use FIARulerPro's synthesis prompts.
+The `/retrieve` response returns deduplicated, ranked `regulation_hits` and `precedent_hits`. Agents do not receive raw text from FIARulerPro's synthesis layer.
 
 ### Models
 
@@ -202,16 +203,16 @@ A `MemoContext` dataclass accumulates agent outputs as the pipeline progresses. 
 If the user does not specify a season, assume the current season (2026 at time of writing; read from config so it can be updated without code changes).
 
 ### Deployment
-Local only for initial development and testing. Railway deployment (matching FIARulerPro's pattern: Dockerfile, persistent volume, GitHub Releases for DB) is planned but deferred until the system is working locally.
+Deployed on Railway as a separate service in the same project as FIARulerPro. The Dockerfile builds the image; `start.sh` generates `.streamlit/secrets.toml` from Railway environment variables at container start. Services communicate over Railway's private network. See `docs/SETUP.md` for full deployment instructions.
 
 ---
 
 ## Deferred / Future Work
 
-- Railway deployment (Dockerfile, start script, volume for DB)
-- Email delivery option (background processing + PDF attachment via SendGrid or similar) — relevant if memo generation time exceeds ~5 minutes in practice
-- Authentication (currently no login gate during local development)
+- Email delivery option (background processing + Word attachment via SendGrid or similar) — relevant if memo generation time exceeds ~5 minutes in practice
 - Memo versioning / history (store past memos for a given concept; track how the risk assessment changes as regulations evolve)
 - Batch mode (assess a set of concepts overnight, produce a report)
 - Integration with FIARulerPro's query log for shared feedback tracking
 - Fine-grained source filtering (e.g. restrict retrieval to specific document types for a given question)
+
+> **Note:** Railway deployment and basic password authentication are both implemented. See `docs/SETUP.md` and `docs/PRODUCTION.md` for current state and planned production improvements (SSO, memo persistence, error recovery).

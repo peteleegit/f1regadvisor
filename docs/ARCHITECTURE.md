@@ -313,6 +313,27 @@ api_key = "your-retrieve-api-key"
 
 ---
 
+## Authentication and Session Management
+
+**File:** `app.py`
+
+### Authentication
+
+Access is gated by a shared password (`APP_PASSWORD` / `secrets.toml [auth] password`). On first load, `app.py` presents a password prompt. On success, a session token is written into Streamlit session state; no user identity is recorded. This is intentionally minimal — see `docs/PRODUCTION.md` for the planned SSO upgrade path.
+
+### Session persistence across WebSocket reconnects
+
+Streamlit destroys session state on WebSocket disconnect (browser refresh, network drop). To allow reconnection without losing an in-progress assessment, `app.py` maintains a **server-side session store**:
+
+- On assessment start, a UUID session ID is generated and appended to the URL as `?sid=<uuid>`.
+- The `MemoContext` is stored in a module-level dict keyed by session ID, alongside a TTL timestamp.
+- On page load, if a `sid` query parameter is present and the session store entry has not expired, the context is restored into `st.session_state` and the UI resumes from where it left off.
+- Expired sessions (default TTL: 2 hours) are evicted on the next page load.
+
+This means bookmarking or refreshing the URL during or after an assessment will restore the memo, provided the server process has not been restarted.
+
+---
+
 ## Key Design Decisions
 
 **No direct substrate import.** F1RegAdvisor calls FIARulerPro's `/retrieve` HTTP endpoint rather than importing the `substrate` Python package. This allows the two services to be deployed, versioned, and scaled independently.
