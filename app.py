@@ -488,7 +488,6 @@ elif st.session_state.phase == "running":
             sk2_ph, r2_col2 = _debate_columns(2)
 
             if not st.session_state.get("ph2_r2_done"):
-                pe_ph = st.empty()
                 try:
                     _sk1 = ctx.debate_rounds[0].skeptic_argument
                     _df1 = ctx.debate_rounds[0].defense_argument
@@ -505,7 +504,6 @@ elif st.session_state.phase == "running":
                                 _df2 = _df2_f.result()
                                 _pe = _pe_f.result()
                         st.markdown(_df2)
-                    pe_ph.markdown(_pe)
                     ctx.debate_rounds.append(DebateRound(2, _sk2, _df2))
                     ctx.political_economy_analysis = _pe
                     st.session_state.ctx = ctx
@@ -518,8 +516,6 @@ elif st.session_state.phase == "running":
                 sk2_ph.markdown(_r.skeptic_argument)
                 with r2_col2:
                     st.markdown(_r.defense_argument)
-                st.markdown("**Political Economy Analysis**")
-                st.markdown(ctx.political_economy_analysis or "")
 
             st.divider()
 
@@ -567,6 +563,12 @@ elif st.session_state.phase == "running":
                         with r3_col2:
                             st.markdown(_r.defense_argument)
 
+                    st.divider()
+
+                # Political Economy Analysis — shown after all debate rounds
+                if ctx.political_economy_analysis:
+                    st.markdown("**Political Economy Analysis**")
+                    st.markdown(ctx.political_economy_analysis)
                     st.divider()
 
                 # ---- Phase 2.5 — Rival Protest (agent runner only) ----
