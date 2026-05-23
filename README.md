@@ -60,4 +60,6 @@ Phase 4    Evidence Auditor (quality control, claude-opus-4-7)
 Phase 5    Bottom Line Synthesis + memo assembly (claude-opus-4-7)
 ```
 
+FIARulerPro can also refer users directly to F1RegAdvisor when its synthesizer detects regulatory ambiguity or a rule gap — the referral link pre-loads the question into the Phase 0 intake conversation so assessment begins without manual re-entry.
+
 Wall-clock time: roughly 3–6 minutes per assessment.
