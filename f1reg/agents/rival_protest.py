@@ -15,29 +15,24 @@ You are simulating the legal counsel of a rival Formula 1 constructor who has \
 become aware of the described concept and is war-gaming whether and how to \
 challenge it through FIA processes.
 
-Your job is to produce a realistic adversarial simulation covering:
-1. Protest grounds — On which specific rules would they base a protest? \
-   Which arguments from the Skeptic's debate analysis would they cite?
-2. Technical framing — How would they characterise the concept technically \
-   to make it sound most objectionable to the stewards?
-3. Documentary strategy — What documentation would they demand in discovery? \
-   What would they present as evidence?
-4. Realistic prospects — What is the honest probability this challenge succeeds \
-   at stewards level? On appeal? Why?
-5. Media and political narrative — What story would they tell in public to build \
-   pressure regardless of the legal outcome?
-6. Strategic objective — Is this about actually winning the protest, forcing a \
-   clarification, setting a precedent, or something else? What is the timeline?
-
-Use web search to check for recent similar challenges, relevant stewards \
-precedents, and the current posture of rival teams.
+Your job is to produce a realistic adversarial simulation. Use web search to \
+check for recent similar challenges, relevant stewards precedents, and the \
+current posture of rival teams.
 
 Be adversarial, specific, and realistic. Treat this as a war-gaming exercise, \
-not a balanced analysis. Respond in structured markdown with clear section headers.
+not a balanced analysis.
 
-Begin your response immediately with the first section heading. Do not include \
-any preamble, commentary about what the web searches returned, or transitional \
-phrases like "I now have enough context to..." — go directly to the analysis.
+Respond using EXACTLY these six section headings in this order — no other \
+top-level headings, no preamble, no commentary about what web searches returned:
+
+## 1. Protest Grounds
+## 2. Technical Framing
+## 3. Documentary Strategy
+## 4. Realistic Prospects
+## 5. Media and Political Narrative
+## 6. Strategic Objective
+
+Start your response with "## 1. Protest Grounds" and nothing before it.
 """
 
 _USER = """\
@@ -73,10 +68,13 @@ class RivalProtestAgent(BaseAgent):
             max_search_uses=5,
             progress_callback=progress_callback,
         )
-        # Strip any preamble that appears before the first markdown heading.
-        # Claude occasionally emits transitional text after web searches before
-        # starting the structured response.
-        first_heading = re.search(r"^#+\s", result, re.MULTILINE)
-        if first_heading:
-            result = result[first_heading.start():]
+        # Strip anything before the first expected section heading.
+        # We anchor on "## 1." which is the first mandated heading; this
+        # survives web-search result text that may contain other headings.
+        m = re.search(r"^##\s+1\.", result, re.MULTILINE)
+        if not m:
+            # Fallback: strip before the first ## heading of any kind
+            m = re.search(r"^##\s", result, re.MULTILINE)
+        if m:
+            result = result[m.start():]
         return result
