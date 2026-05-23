@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import threading
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from typing import Any
 
 import anthropic
@@ -88,6 +88,7 @@ class BaseAgent:
         model: str | None = None,
         max_tokens: int | None = None,
         max_search_uses: int = 5,
+        progress_callback: Callable[[str], None] | None = None,
     ) -> str:
         """Call Claude with web search; handles the tool-use loop.
 
@@ -121,15 +122,19 @@ class BaseAgent:
 
             if response.stop_reason == "tool_use":
                 msgs.append({"role": "assistant", "content": response.content})
-                tool_results = [
-                    {
+                tool_results = []
+                for block in response.content:
+                    if getattr(block, "type", None) != "tool_use":
+                        continue
+                    if progress_callback:
+                        query = getattr(block, "input", {}).get("query", "")
+                        if query:
+                            progress_callback(f"Searching: *{query}*")
+                    tool_results.append({
                         "type": "tool_result",
                         "tool_use_id": block.id,
                         "content": "",
-                    }
-                    for block in response.content
-                    if getattr(block, "type", None) == "tool_use"
-                ]
+                    })
                 if tool_results:
                     msgs.append({"role": "user", "content": tool_results})
                 else:

@@ -49,7 +49,13 @@ Check web search for recent relevant context first."""
 
 class RivalProtestAgent(BaseAgent):
 
-    def analyse(self, concept: str, phase1_context: str, transcript: str) -> str:
+    def analyse(
+        self,
+        concept: str,
+        phase1_context: str,
+        transcript: str,
+        progress_callback=None,
+    ) -> str:
         msg = _USER.format(
             concept=concept,
             phase1_context=phase1_context,
@@ -59,4 +65,5 @@ class RivalProtestAgent(BaseAgent):
             _SYSTEM,
             [{"role": "user", "content": msg}],
             max_search_uses=5,
+            progress_callback=progress_callback,
         )

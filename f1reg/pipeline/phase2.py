@@ -199,7 +199,7 @@ def run_phase2(
     # Phase 2.5: Rival Protest Agent (sees full transcript)
     # ------------------------------------------------------------------
     if progress_callback:
-        progress_callback("Phase 2.5: Simulating rival protest challenge...")
+        progress_callback("Phase 2.5: Considering rival team legal challenge...")
 
     transcript = ctx.debate_transcript()
     ctx.rival_protest_analysis = RivalProtestAgent().analyse(concept, phase1_ctx, transcript)

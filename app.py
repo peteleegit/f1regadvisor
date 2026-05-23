@@ -83,6 +83,24 @@ def _check_password() -> bool:
         st.session_state.authenticated = True
         return True
 
+    # FIARulerPro referral bypass — shared static token in ?ref= skips login.
+    # On match: issue a normal session, clean ?ref= from URL, and rerun.
+    ref_param = st.query_params.get("ref")
+    if ref_param:
+        try:
+            expected_ref = st.secrets["fiaruler"]["ref_token"]
+        except Exception:
+            expected_ref = None
+        if expected_ref and ref_param == expected_ref:
+            token = _issue_session()
+            st.query_params["sid"] = token
+            try:
+                del st.query_params["ref"]
+            except Exception:
+                pass
+            st.session_state.authenticated = True
+            st.rerun()
+
     if st.session_state.get("authenticated"):
         return True
 
@@ -556,12 +574,18 @@ elif st.session_state.phase == "running":
                 if _r3_done and not st.session_state.get("ph2_protest_done"):
                     try:
                         _transcript = ctx.debate_transcript()
-                        with st.spinner(
-                            "Simulating rival team legal challenge "
-                            "(searching web for recent context)..."
-                        ):
+                        with st.status(
+                            "Considering rival team legal challenge...",
+                            expanded=True,
+                        ) as _protest_status:
                             _protest = RivalProtestAgent().analyse(
-                                concept, phase1_ctx, _transcript
+                                concept, phase1_ctx, _transcript,
+                                progress_callback=lambda msg: st.write(msg),
+                            )
+                            _protest_status.update(
+                                label="Rival team legal challenge considered",
+                                state="complete",
+                                expanded=False,
                             )
                         ctx.rival_protest_analysis = _protest
                         st.session_state.ctx = ctx
