@@ -140,7 +140,7 @@ Both agents may argue beyond what the retrieved text strictly supports, but must
 
 **Round 2 (parallel)**
 
-Each agent reads the other's Round 1 argument and responds, specifically targeting the weakest points. The **PoliticalEconomyAgent** also runs during Round 2, independently:
+Each agent reads the other's Round 1 argument and responds, specifically targeting the weakest points. The **PoliticalEconomyAgent** also runs during Round 2 (in parallel, for efficiency), but its output is displayed after all debate rounds complete — after Round 3 if it ran, otherwise after Round 2.
 
 **PoliticalEconomyAgent** (`f1reg/agents/political_economy.py`)
 - Uses web search to assess current FIA priorities, rival team posture, and recent regulatory controversies
