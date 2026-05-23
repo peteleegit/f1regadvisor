@@ -6,6 +6,8 @@ transcript from Phase 2 before producing its output.  Uses web search.
 """
 from __future__ import annotations
 
+import re
+
 from f1reg.agents.base import BaseAgent
 
 _SYSTEM = """\
@@ -32,6 +34,10 @@ precedents, and the current posture of rival teams.
 
 Be adversarial, specific, and realistic. Treat this as a war-gaming exercise, \
 not a balanced analysis. Respond in structured markdown with clear section headers.
+
+Begin your response immediately with the first section heading. Do not include \
+any preamble, commentary about what the web searches returned, or transitional \
+phrases like "I now have enough context to..." — go directly to the analysis.
 """
 
 _USER = """\
@@ -61,9 +67,16 @@ class RivalProtestAgent(BaseAgent):
             phase1_context=phase1_context,
             transcript=transcript,
         )
-        return self._call_with_web_search(
+        result = self._call_with_web_search(
             _SYSTEM,
             [{"role": "user", "content": msg}],
             max_search_uses=5,
             progress_callback=progress_callback,
         )
+        # Strip any preamble that appears before the first markdown heading.
+        # Claude occasionally emits transitional text after web searches before
+        # starting the structured response.
+        first_heading = re.search(r"^#+\s", result, re.MULTILINE)
+        if first_heading:
+            result = result[first_heading.start():]
+        return result
