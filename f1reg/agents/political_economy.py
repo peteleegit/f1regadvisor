@@ -10,6 +10,8 @@ tells you what the FIA will actually do.
 """
 from __future__ import annotations
 
+import re as _re
+
 from f1reg.agents.base import BaseAgent
 
 _SYSTEM = """\
@@ -63,7 +65,9 @@ personnel, and the current competitive landscape before giving your analysis.
 
 Be frank and direct. This is an internal advisory. Label speculation clearly \
 ("By inference...", "On available evidence..."). Do not hedge where you have a view. \
-Respond in structured markdown with clear section headers matching the six areas above.
+Respond in structured markdown with clear section headers matching the six areas above. \
+Start your response directly with "## 1. FIA Key Actors" — no preamble, no summary of \
+search results, nothing before the first section heading.
 """
 
 _USER = """\
@@ -81,8 +85,12 @@ class PoliticalEconomyAgent(BaseAgent):
 
     def analyse(self, concept: str, phase1_context: str) -> str:
         msg = _USER.format(concept=concept, phase1_context=phase1_context)
-        return self._call_with_web_search(
+        result = self._call_with_web_search(
             _SYSTEM,
             [{"role": "user", "content": msg}],
             max_search_uses=5,
         )
+        m = _re.search(r"(?m)^##\s+1\b", result)
+        if m:
+            result = result[m.start():]
+        return result
