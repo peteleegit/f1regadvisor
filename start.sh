@@ -13,6 +13,7 @@ api_key = "${ANTHROPIC_API_KEY}"
 [fiaruler]
 api_url = "${F1REG_FIARULER_API_URL}"
 api_key = "${F1REG_FIARULER_API_KEY}"
+ref_token = "${FIARULER_REF_TOKEN:-}"
 EOF
 
 exec streamlit run app.py \
