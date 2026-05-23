@@ -197,6 +197,9 @@ if "question_count" not in st.session_state:
     st.session_state.question_count = 0
 if "uploaded_text" not in st.session_state:
     st.session_state.uploaded_text = None
+if "prepopulated_input" not in st.session_state:
+    raw_q = st.query_params.get("q", "").strip()
+    st.session_state.prepopulated_input = raw_q if raw_q else None
 
 
 # ---------------------------------------------------------------------------
@@ -291,8 +294,14 @@ if st.session_state.phase == "intake":
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
+    # Consume ?q= pre-population from FIARulerPro referral (runs at most once)
+    _prepop = None
+    if st.session_state.prepopulated_input and not st.session_state.display_messages:
+        _prepop = st.session_state.prepopulated_input
+        st.session_state.prepopulated_input = None
+
     # Chat input
-    user_input = st.chat_input("Describe the concept...")
+    user_input = st.chat_input("Describe the concept...") or _prepop
     if user_input:
         # Show user message immediately
         st.session_state.display_messages.append({"role": "user", "content": user_input})
