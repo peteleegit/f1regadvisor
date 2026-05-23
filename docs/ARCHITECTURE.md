@@ -112,14 +112,16 @@ The response is split into:
 Two agents run simultaneously, each receiving the formatted text of its respective hits:
 
 **RegulatoryTextAgent** (`f1reg/agents/regulatory_text.py`)
-- Answers: "What do the rules literally say?"
+- Answers: "What do the rules literally say — and where are they deliberately vague?"
 - Identifies controlling articles, key definitions, cross-references, and regulatory gaps
-- Output: `RegulatoryTextOutput` (summary + structured lists)
+- Classifies each ambiguity by likely FIA intent: `PRESERVED DISCRETION` / `DRAFTING IMPRECISION` / `UNKNOWN`
+- Output: `RegulatoryTextOutput` (summary + structured lists + `ambiguities`)
 
 **PrecedentAgent** (`f1reg/agents/precedent.py`)
-- Answers: "How have these rules been enforced in practice?"
+- Answers: "How have these rules been enforced — and how consistently?"
 - Identifies comparable cases, analogous cases, distinctions, and precedent gaps
-- Output: `PrecedentOutput` (summary + structured lists)
+- Produces `consistency_rating` (CONSISTENT / MIXED / CONTRADICTORY / INSUFFICIENT PRECEDENT), `trend_direction`, and `consistency_analysis` — explicitly assessing what the enforcement pattern reveals about FIA behaviour
+- Output: `PrecedentOutput` (summary + structured lists + consistency fields)
 
 ---
 
@@ -142,7 +144,8 @@ Each agent reads the other's Round 1 argument and responds, specifically targeti
 
 **PoliticalEconomyAgent** (`f1reg/agents/political_economy.py`)
 - Uses web search to assess current FIA priorities, rival team posture, and recent regulatory controversies
-- Covers: FIA reaction, rival team response, reactive rule change risk, media exposure, paddock dynamics
+- Covers six areas: FIA key actors (named individuals and their known tendencies), FIA institutional response, rival team response, reactive rule change risk, ambiguity as governance (whether rule vagueness is a deliberate FIA instrument), and media/paddock dynamics
+- Its output is the primary input to the enforcement risk field in the Phase 5 bottom line
 
 **Round 3 (optional)**
 
@@ -193,13 +196,17 @@ Produces a list of `AuditFinding` records with severity `HIGH` or `LOW`. HIGH fi
 **File:** `f1reg/agents/bottom_line.py`  
 **Model:** `claude-opus-4-7`
 
-Reads all prior agent outputs and produces:
-- **Verdict** (exactly one): `LIKELY PERMITTED` / `LIKELY PROHIBITED` / `AMBIGUOUS` / `HIGH-RISK GREY AREA` / `REQUIRES FIA CLARIFICATION`
-- **Confidence**: `high confidence` / `moderate confidence` / `low confidence`
-- **Bottom line summary**: two sentences maximum, plain English, no hedging
-- **Political risk summary**: three sentences covering rival protest likelihood, FIA dynamics, media exposure
+Reads all prior agent outputs and produces a two-track bottom line that explicitly distinguishes what the rules say from what the FIA will do:
+
+- **Legal standing** (exactly one): `TEXTUALLY COMPLIANT` / `TEXTUALLY NON-COMPLIANT` / `GENUINELY AMBIGUOUS` — what a neutral expert reading the rules in good faith would conclude
+- **Enforcement risk** (exactly one): `LOW` / `MODERATE` / `HIGH` / `POLITICALLY DETERMINED` — driven primarily by political economy analysis and precedent consistency, not textual analysis
+- **FIA predictability** (exactly one): `HIGH` / `MEDIUM` / `LOW` / `UNPREDICTABLE` — how reliably the FIA applies rules in this area
+- **Bottom line summary**: three sentences — legal standing, then enforcement risk and what drives it, then the key swing factor
+- **Political risk summary**: three sentences covering rival protest likelihood, key FIA actor dynamics, media exposure
 - **Arguments for/against legality**: 3–5 bullets each, ≤20 words per bullet
 - **Open questions**: genuine unresolved issues only
+
+A concept can be textually compliant and face high enforcement risk, or non-compliant but face low enforcement risk. The agent is required to be honest about this gap when it exists.
 
 ---
 
@@ -210,11 +217,16 @@ Reads all prior agent outputs and produces:
 The memo is verdict-first — the most time-pressed reader gets the answer immediately:
 
 ```
-Bottom Line (verdict + confidence + 2-sentence summary)
+Bottom Line
+  Legal standing:      TEXTUALLY COMPLIANT / NON-COMPLIANT / GENUINELY AMBIGUOUS
+  Enforcement risk:    LOW / MODERATE / HIGH / POLITICALLY DETERMINED
+  FIA predictability:  HIGH / MEDIUM / LOW / UNPREDICTABLE
+  [3-sentence narrative: legal standing → enforcement risk → key swing factor]
 Recommended Action
 ---
-Arguments For Legality        [labelled as advocacy]
-Arguments Against / Key Risks [labelled as advocacy]
+FIA Reality Assessment          [precedent consistency + ambiguity intent classification]
+Arguments For Legality          [labelled as advocacy]
+Arguments Against / Key Risks   [labelled as advocacy]
 Political and Protest Risk
 Mitigations
 Open Questions
@@ -225,6 +237,8 @@ Disclaimer
 Appendix: Regulatory Analysis · Precedent Analysis · Political Economy ·
           Rival Protest Simulation · Debate Transcript (all rounds)
 ```
+
+The **FIA Reality Assessment** section sits above the advocacy arguments and draws directly from the structured outputs of Phase 1: the precedent consistency rating and trend, and each regulatory ambiguity with its intent classification. This surfaces the systemic factors that drive enforcement risk before the reader encounters the legal arguments.
 
 Output is rendered as Markdown in the Streamlit UI and also available as a downloadable `.docx` file (via `python-docx`) that users can edit and annotate before sending to counsel.
 
@@ -245,7 +259,9 @@ Output is rendered as Markdown in the Streamlit UI and also available as a downl
 | `rival_protest_analysis` | Phase 2.5 |
 | `recommended_action`, `mitigations` | Phase 3 |
 | `audit_findings` | Phase 4 |
-| `bottom_line_verdict`, `bottom_line_summary`, etc. | Phase 5 |
+| `legal_standing`, `enforcement_risk`, `fia_predictability` | Phase 5 |
+| `bottom_line_summary`, `political_risk_summary` | Phase 5 |
+| `arguments_for`, `arguments_against`, `open_questions` | Phase 5 |
 | `memo_markdown` | Memo assembly |
 
 ---
@@ -347,3 +363,5 @@ This means bookmarking or refreshing the URL during or after an assessment will 
 **Streaming debate display.** Each debate agent has a `stream_*` twin that yields text chunks. The Streamlit UI streams the Skeptic's argument while the Defence's runs in a background thread, so the user sees both sides appear in near-real-time rather than waiting for both to complete.
 
 **Verdict-first memo structure.** The most senior reader (technical director, legal counsel) gets the bottom line and recommended action before any analysis. Full debate transcript and supporting analysis are in the appendix.
+
+**Two-track bottom line.** FIA regulations are deliberately written to preserve regulatory discretion — what the rules say and what the FIA will do are often different questions. The bottom line explicitly separates legal standing (a textual analysis question) from enforcement risk (a political and institutional question), and requires the synthesis agent to be honest about any gap between them. A single collapsed verdict implied a false precision that alpha testing confirmed was misleading to readers.

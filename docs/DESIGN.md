@@ -31,7 +31,7 @@ Every run produces a structured memo with the following sections:
 | 5 | **Arguments against legality** | Strongest FIA/rival-team challenge; labelled as advocacy |
 | 6 | **Political, protest, and media risk** | FIA political dynamics, rival team protest likelihood and framing, media and public reaction |
 | 7 | **Mitigations** | Design changes, operating constraints, documentation strategy, testing approach, clarification path |
-| 8 | **Bottom line** | Verdict (likely permitted / likely prohibited / ambiguous / high-risk grey area / requires FIA clarification) with confidence qualifier (e.g. "Likely permitted — moderate confidence") |
+| 8 | **Bottom line** | Two-track assessment: *legal standing* (what the rules say, read in good faith) and *enforcement risk* (what the FIA will likely do, driven by political economy and precedent consistency). These two tracks can and often do diverge. A third field — *FIA predictability* — indicates how consistently the FIA applies rules in this area. |
 | 9 | **Recommended next action** | Proceed / modify / escalate / seek clarification / prepare defence / stop |
 | 10 | **Open questions** | Missing facts, stale sources, unresolved ambiguities, items requiring human review |
 | A | **Appendix — Debate transcript** | Full record of the FIA Skeptic vs. Liberal Construction debate, all rounds |
@@ -53,13 +53,15 @@ Every run produces a structured memo with the following sections:
 
 **Regulatory Text Agent**
 - Receives the `regulation_hits` returned from the Phase 1 HTTP retrieval call
-- Answers: "What do the rules literally say?"
+- Answers: "What do the rules literally say — and where are they deliberately vague?"
 - Does not speculate; cites sources only
+- Classifies each identified ambiguity by likely FIA intent: `PRESERVED DISCRETION` (vagueness appears deliberate — an instrument of governance, not a drafting error), `DRAFTING IMPRECISION` (unintentional; a clarification request would likely be accepted), or `UNKNOWN`
 
 **Precedent and Practice Agent**
 - Receives the `precedent_hits` returned from the Phase 1 HTTP retrieval call (Stewards decisions, infringement notices, summonses, appeals, right-of-review outcomes)
-- Answers: "How has this actually been enforced in practice?"
+- Answers: "How has this actually been enforced — and how consistently?"
 - Notes enforcement history, distinctions from past cases, and gaps where there is no precedent
+- Produces a `consistency_rating` (CONSISTENT / MIXED / CONTRADICTORY / INSUFFICIENT PRECEDENT) and `trend_direction`, and explicitly assesses what any inconsistency reveals about how the FIA actually uses the rule in practice
 
 ### Phase 2 — Adversarial debate
 
@@ -80,9 +82,9 @@ Each agent reads the other's Round 1 and responds — specifically targeting the
 The orchestrator decides whether genuine unresolved contention warrants a final rebuttal round. Not mandatory.
 
 **Political Economy Agent ("James") — runs during Round 2, independently:**
-- Assesses paddock dynamics, FIA incentives, competitive-balance concerns, recent regulatory sensitivities
-- Evaluates whether the concept is likely to trigger a corrective rule change or clarification
-- Has access to web search (see domains below)
+- Covers six areas: (1) **FIA key actors** — names the relevant individuals (Technical Director, Race Director, WMSC figures), their known tendencies, and how current FIA leadership style affects the likely response; (2) **FIA institutional response** — approval, TD, clarification request, or wait for a protest; (3) **rival team response** — who will object and on what grounds; (4) **reactive rule change risk**; (5) **ambiguity as governance** — whether rule vagueness is a deliberate FIA tool being actively used in this area; (6) **media and paddock dynamics**
+- Uses web search for current FIA personnel, recent controversies, and competitive context
+- Its output is the **primary input** to the enforcement risk assessment in Phase 5 — not supplementary colour
 - Named "James" in the UI
 
 ### Phase 2.5 — External challenge simulation
@@ -114,10 +116,10 @@ The orchestrator decides whether genuine unresolved contention warrants a final 
 ### Phase 5 — Synthesis (orchestrator)
 
 - Reads all agent outputs
-- Synthesises the Bottom line verdict and confidence qualifier
-- Assembles the final memo in section order
-- Appends the full debate transcript
-- Uses claude-opus-4-7 for the verdict synthesis
+- Produces a **two-track bottom line**: legal standing (what the rules say) and enforcement risk (what the FIA will do), which can diverge significantly
+- Sets FIA predictability based on the precedent consistency rating and political economy analysis
+- Assembles the final memo in section order, appending the full debate transcript
+- Uses claude-opus-4-7 for the synthesis
 
 ---
 
