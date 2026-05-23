@@ -93,4 +93,7 @@ class PoliticalEconomyAgent(BaseAgent):
         m = _re.search(r"(?m)^##\s+1\b", result)
         if m:
             result = result[m.start():]
+        # Demote ## headings to #### so subsections render smaller than the
+        # ### section heading they sit under in the memo and UI.
+        result = _re.sub(r"(?m)^## ", "#### ", result)
         return result

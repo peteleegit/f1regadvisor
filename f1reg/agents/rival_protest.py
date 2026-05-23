@@ -74,4 +74,5 @@ class RivalProtestAgent(BaseAgent):
         m = _re.search(r"(?m)^##\s+1\b", result)
         if m:
             result = result[m.start():]
+        result = _re.sub(r"(?m)^## ", "#### ", result)
         return result
