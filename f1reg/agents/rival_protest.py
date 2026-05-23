@@ -6,8 +6,6 @@ transcript from Phase 2 before producing its output.  Uses web search.
 """
 from __future__ import annotations
 
-import re
-
 from f1reg.agents.base import BaseAgent
 
 _SYSTEM = """\
@@ -62,19 +60,20 @@ class RivalProtestAgent(BaseAgent):
             phase1_context=phase1_context,
             transcript=transcript,
         )
+        # Prefill the assistant turn so the response is guaranteed to start
+        # with the first section heading — no preamble possible.  The model
+        # still fires web searches mid-generation as it writes each section.
         result = self._call_with_web_search(
             _SYSTEM,
-            [{"role": "user", "content": msg}],
+            [
+                {"role": "user", "content": msg},
+                {"role": "assistant", "content": "## 1. Protest Grounds\n\n"},
+            ],
             max_search_uses=5,
             progress_callback=progress_callback,
         )
-        # Strip preamble before the first section heading.
-        # No line-start anchor (^) — text blocks from the API can be
-        # concatenated without a trailing newline, which would put "## 1."
-        # mid-line and cause an anchored regex to miss it entirely.
-        for pattern in (r"## 1\.", r"##\s+[Pp]rotest", r"##\s"):
-            m = re.search(pattern, result)
-            if m:
-                result = result[m.start():]
-                break
+        # Prefill is echoed back in the response; if for any reason it is not,
+        # prepend the heading so downstream rendering is never missing it.
+        if not result.lstrip().startswith("## 1."):
+            result = "## 1. Protest Grounds\n\n" + result.lstrip()
         return result
