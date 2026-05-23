@@ -39,6 +39,9 @@ class RegulatoryTextOutput(BaseModel):
     key_definitions: list[str] = []
     cross_references: list[str] = []
     gaps: list[str] = []
+    # Each entry: "<INTENT_LABEL> — <article/rule>: <what is ambiguous and why>"
+    # INTENT_LABEL one of: PRESERVED DISCRETION | DRAFTING IMPRECISION | UNKNOWN
+    ambiguities: list[str] = []
 
 
 class PrecedentOutput(BaseModel):
@@ -47,6 +50,11 @@ class PrecedentOutput(BaseModel):
     analogous_cases: list[str] = []
     distinctions: list[str] = []
     gaps: list[str] = []
+    # CONSISTENT | MIXED | CONTRADICTORY | INSUFFICIENT PRECEDENT
+    consistency_rating: str = "INSUFFICIENT PRECEDENT"
+    # MORE PERMISSIVE | MORE RESTRICTIVE | STABLE | UNCLEAR
+    trend_direction: str = "UNCLEAR"
+    consistency_analysis: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -107,13 +115,20 @@ class MemoContext:
     # Phase 4 — evidence audit
     audit_findings: list[AuditFinding] = field(default_factory=list)
 
-    # Phase 5 — synthesised sections
-    arguments_for: Optional[str] = None
-    arguments_against: Optional[str] = None
-    bottom_line_verdict: Optional[str] = None
-    bottom_line_confidence: Optional[str] = None
+    # Phase 5 — synthesised bottom line
+    # legal_standing: what the rules say read in good faith
+    #   TEXTUALLY COMPLIANT | TEXTUALLY NON-COMPLIANT | GENUINELY AMBIGUOUS
+    legal_standing: Optional[str] = None
+    # enforcement_risk: what the FIA is likely to actually do
+    #   LOW | MODERATE | HIGH | POLITICALLY DETERMINED
+    enforcement_risk: Optional[str] = None
+    # fia_predictability: how consistently the FIA applies rules in this area
+    #   HIGH | MEDIUM | LOW | UNPREDICTABLE
+    fia_predictability: Optional[str] = None
     bottom_line_summary: Optional[str] = None
     political_risk_summary: Optional[str] = None
+    arguments_for: Optional[str] = None
+    arguments_against: Optional[str] = None
     open_questions: Optional[str] = None
 
     # Final assembled memo (Markdown)

@@ -53,8 +53,9 @@ def run_phase345(
         progress_callback("Phase 5: Synthesising bottom line verdict and assembling memo...")
 
     ph5 = BottomLineAgent().synthesise(ctx)
-    ctx.bottom_line_verdict = ph5.bottom_line_verdict
-    ctx.bottom_line_confidence = ph5.bottom_line_confidence
+    ctx.legal_standing = ph5.legal_standing
+    ctx.enforcement_risk = ph5.enforcement_risk
+    ctx.fia_predictability = ph5.fia_predictability
     ctx.bottom_line_summary = ph5.bottom_line_summary
     ctx.political_risk_summary = ph5.political_risk_summary
     ctx.arguments_for = "\n".join(f"- {a}" for a in ph5.arguments_for)
