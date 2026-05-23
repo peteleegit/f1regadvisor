@@ -92,9 +92,10 @@ class BaseAgent:
     ) -> str:
         """Call Claude with web search; handles the tool-use loop.
 
-        The web_search_20250305 built-in tool is executed server-side by
-        Anthropic — the client drives the loop but does not implement the
-        search itself.
+        The web_search_20250305 built-in tool runs server-side: searches and
+        continuation happen within a single API call, so stop_reason is
+        "end_turn" with web_search_tool_use blocks embedded in response.content.
+        Progress callbacks are emitted from those blocks before returning.
         """
         tools = [{
             "type": "web_search_20250305",
@@ -116,6 +117,16 @@ class BaseAgent:
             )
 
             if response.stop_reason in ("end_turn", None):
+                # Built-in web_search_20250305 completes in one shot.
+                # Emit progress for any search blocks found in the response.
+                if progress_callback:
+                    for block in response.content:
+                        btype = getattr(block, "type", "") or ""
+                        bname = getattr(block, "name", "") or ""
+                        if "search" in btype.lower() or bname == "web_search":
+                            query = getattr(block, "input", {}).get("query", "")
+                            if query:
+                                progress_callback(f"Searched: *{query}*")
                 return "".join(
                     b.text for b in response.content if hasattr(b, "text")
                 )
@@ -124,7 +135,10 @@ class BaseAgent:
                 msgs.append({"role": "assistant", "content": response.content})
                 tool_results = []
                 for block in response.content:
-                    if getattr(block, "type", None) != "tool_use":
+                    btype = getattr(block, "type", "") or ""
+                    bname = getattr(block, "name", "") or ""
+                    is_search = (btype == "tool_use") or "search" in btype.lower() or bname == "web_search"
+                    if not is_search:
                         continue
                     if progress_callback:
                         query = getattr(block, "input", {}).get("query", "")

@@ -578,6 +578,7 @@ elif st.session_state.phase == "running":
                             "Considering rival team legal challenge...",
                             expanded=True,
                         ) as _protest_status:
+                            st.write("Searching web for recent regulatory context and precedent...")
                             _protest = RivalProtestAgent().analyse(
                                 concept, phase1_ctx, _transcript,
                                 progress_callback=lambda msg: st.write(msg),
