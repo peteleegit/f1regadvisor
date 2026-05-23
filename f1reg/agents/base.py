@@ -91,11 +91,11 @@ class BaseAgent:
         max_search_uses: int = 5,
         progress_callback: Callable[[str], None] | None = None,
     ) -> str:
-        """Call Claude with web search; emit progress callbacks per search query.
+        """Call Claude with web search (server-side built-in tool).
 
-        web_search_20250305 runs server-side inside a single streaming call.
-        We detect server_tool_use blocks in the stream to surface each search
-        query to the caller in real time — before the overall call completes.
+        web_search_20250305 completes all searches in a single blocking API
+        call.  If progress_callback is provided it is called once per search
+        query found in the response, immediately after the call returns.
         """
         tools = [{
             "type": "web_search_20250305",
@@ -103,53 +103,19 @@ class BaseAgent:
             "max_uses": max_search_uses,
             "allowed_domains": WEB_SEARCH_DOMAINS,
         }]
-
-        _block_name = ""
-        _block_json = ""
-
-        with self.client.messages.stream(
+        response = self.client.messages.create(
             model=model or self.model,
             max_tokens=max_tokens or self.max_tokens,
             system=system,
             messages=list(messages),
             tools=tools,
-        ) as stream:
-            for event in stream:
-                etype = getattr(event, "type", "")
-
-                if etype == "content_block_start":
-                    cb = getattr(event, "content_block", None)
-                    if cb is not None:
-                        _block_name = getattr(cb, "name", "") or ""
-                        # Some server tools pre-populate input at block start
-                        pre = getattr(cb, "input", None)
-                        if pre and isinstance(pre, dict) and _block_name == "web_search":
-                            query = pre.get("query", "")
-                            if query and progress_callback:
-                                progress_callback(f"Searching: *{query}*")
-                            _block_json = ""
-                        else:
-                            _block_json = ""
-                    else:
-                        _block_name = ""
-                        _block_json = ""
-
-                elif etype == "content_block_delta":
-                    delta = getattr(event, "delta", None)
-                    if delta is not None and getattr(delta, "type", "") == "input_json_delta":
-                        _block_json += getattr(delta, "partial_json", "") or ""
-
-                elif etype == "content_block_stop":
-                    if _block_name == "web_search" and _block_json and progress_callback:
-                        try:
-                            query = _json.loads(_block_json).get("query", "")
-                            if query:
-                                progress_callback(f"Searching: *{query}*")
-                        except Exception:
-                            pass
-                    _block_name = ""
-                    _block_json = ""
-
-            final = stream.get_final_message()
-
-        return "\n".join(b.text for b in final.content if hasattr(b, "text"))
+        )
+        if progress_callback:
+            for block in response.content:
+                btype = getattr(block, "type", "") or ""
+                bname = getattr(block, "name", "") or ""
+                if bname == "web_search" or "search" in btype:
+                    query = (getattr(block, "input", None) or {}).get("query", "")
+                    if query:
+                        progress_callback(f"Searched: *{query}*")
+        return "\n".join(b.text for b in response.content if hasattr(b, "text"))
