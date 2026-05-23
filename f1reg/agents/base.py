@@ -117,9 +117,15 @@ class BaseAgent:
             )
 
             if response.stop_reason in ("end_turn", None):
-                # Built-in web_search_20250305 completes in one shot.
-                # Emit progress for any search blocks found in the response.
                 if progress_callback:
+                    # Diagnostic: report all block types so we can see what
+                    # the API actually returns for web_search_20250305.
+                    seen = [
+                        f"{getattr(b, 'type', '?')}/"
+                        f"{getattr(b, 'name', '-')}"
+                        for b in response.content
+                    ]
+                    progress_callback(f"[debug] blocks: {', '.join(seen)}")
                     for block in response.content:
                         btype = getattr(block, "type", "") or ""
                         bname = getattr(block, "name", "") or ""
