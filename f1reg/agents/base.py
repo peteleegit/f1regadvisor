@@ -118,4 +118,4 @@ class BaseAgent:
                     query = (getattr(block, "input", None) or {}).get("query", "")
                     if query:
                         progress_callback(f"Searched: *{query}*")
-        return "\n".join(b.text for b in response.content if hasattr(b, "text"))
+        return "\n".join(b.text for b in response.content if getattr(b, "type", "") == "text")

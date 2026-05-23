@@ -6,6 +6,8 @@ transcript from Phase 2 before producing its output.  Uses web search.
 """
 from __future__ import annotations
 
+import re as _re
+
 from f1reg.agents.base import BaseAgent
 
 _SYSTEM = """\
@@ -60,9 +62,16 @@ class RivalProtestAgent(BaseAgent):
             phase1_context=phase1_context,
             transcript=transcript,
         )
-        return self._call_with_web_search(
+        result = self._call_with_web_search(
             _SYSTEM,
             [{"role": "user", "content": msg}],
             max_search_uses=5,
             progress_callback=progress_callback,
         )
+        # Claude sometimes writes preamble before the structured sections
+        # despite the system prompt.  Strip everything before "## 1." so the
+        # memo only contains the six structured sections.
+        m = _re.search(r"(?m)^##\s+1\b", result)
+        if m:
+            result = result[m.start():]
+        return result
