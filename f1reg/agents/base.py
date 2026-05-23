@@ -1,6 +1,7 @@
 """Base agent — shared Anthropic client and call helpers."""
 from __future__ import annotations
 
+import json as _json
 import threading
 from collections.abc import Callable, Generator
 from typing import Any
@@ -90,12 +91,11 @@ class BaseAgent:
         max_search_uses: int = 5,
         progress_callback: Callable[[str], None] | None = None,
     ) -> str:
-        """Call Claude with web search; handles the tool-use loop.
+        """Call Claude with web search; emit progress callbacks per search query.
 
-        The web_search_20250305 built-in tool runs server-side: searches and
-        continuation happen within a single API call, so stop_reason is
-        "end_turn" with web_search_tool_use blocks embedded in response.content.
-        Progress callbacks are emitted from those blocks before returning.
+        web_search_20250305 runs server-side inside a single streaming call.
+        We detect server_tool_use blocks in the stream to surface each search
+        query to the caller in real time — before the overall call completes.
         """
         tools = [{
             "type": "web_search_20250305",
@@ -103,63 +103,53 @@ class BaseAgent:
             "max_uses": max_search_uses,
             "allowed_domains": WEB_SEARCH_DOMAINS,
         }]
-        msgs = list(messages)
-        m = model or self.model
-        mt = max_tokens or self.max_tokens
 
-        while True:
-            response = self.client.messages.create(
-                model=m,
-                max_tokens=mt,
-                system=system,
-                messages=msgs,
-                tools=tools,
-            )
+        _block_name = ""
+        _block_json = ""
 
-            if response.stop_reason in ("end_turn", None):
-                if progress_callback:
-                    # Diagnostic: report all block types so we can see what
-                    # the API actually returns for web_search_20250305.
-                    seen = [
-                        f"{getattr(b, 'type', '?')}/"
-                        f"{getattr(b, 'name', '-')}"
-                        for b in response.content
-                    ]
-                    progress_callback(f"[debug] blocks: {', '.join(seen)}")
-                    for block in response.content:
-                        btype = getattr(block, "type", "") or ""
-                        bname = getattr(block, "name", "") or ""
-                        if "search" in btype.lower() or bname == "web_search":
-                            query = getattr(block, "input", {}).get("query", "")
+        with self.client.messages.stream(
+            model=model or self.model,
+            max_tokens=max_tokens or self.max_tokens,
+            system=system,
+            messages=list(messages),
+            tools=tools,
+        ) as stream:
+            for event in stream:
+                etype = getattr(event, "type", "")
+
+                if etype == "content_block_start":
+                    cb = getattr(event, "content_block", None)
+                    if cb is not None:
+                        _block_name = getattr(cb, "name", "") or ""
+                        # Some server tools pre-populate input at block start
+                        pre = getattr(cb, "input", None)
+                        if pre and isinstance(pre, dict) and _block_name == "web_search":
+                            query = pre.get("query", "")
+                            if query and progress_callback:
+                                progress_callback(f"Searching: *{query}*")
+                            _block_json = ""
+                        else:
+                            _block_json = ""
+                    else:
+                        _block_name = ""
+                        _block_json = ""
+
+                elif etype == "content_block_delta":
+                    delta = getattr(event, "delta", None)
+                    if delta is not None and getattr(delta, "type", "") == "input_json_delta":
+                        _block_json += getattr(delta, "partial_json", "") or ""
+
+                elif etype == "content_block_stop":
+                    if _block_name == "web_search" and _block_json and progress_callback:
+                        try:
+                            query = _json.loads(_block_json).get("query", "")
                             if query:
-                                progress_callback(f"Searched: *{query}*")
-                return "".join(
-                    b.text for b in response.content if hasattr(b, "text")
-                )
+                                progress_callback(f"Searching: *{query}*")
+                        except Exception:
+                            pass
+                    _block_name = ""
+                    _block_json = ""
 
-            if response.stop_reason == "tool_use":
-                msgs.append({"role": "assistant", "content": response.content})
-                tool_results = []
-                for block in response.content:
-                    btype = getattr(block, "type", "") or ""
-                    bname = getattr(block, "name", "") or ""
-                    is_search = (btype == "tool_use") or "search" in btype.lower() or bname == "web_search"
-                    if not is_search:
-                        continue
-                    if progress_callback:
-                        query = getattr(block, "input", {}).get("query", "")
-                        if query:
-                            progress_callback(f"Searching: *{query}*")
-                    tool_results.append({
-                        "type": "tool_result",
-                        "tool_use_id": block.id,
-                        "content": "",
-                    })
-                if tool_results:
-                    msgs.append({"role": "user", "content": tool_results})
-                else:
-                    break
-            else:
-                break
+            final = stream.get_final_message()
 
-        return ""
+        return "".join(b.text for b in final.content if hasattr(b, "text"))
