@@ -152,4 +152,4 @@ class BaseAgent:
 
             final = stream.get_final_message()
 
-        return "".join(b.text for b in final.content if hasattr(b, "text"))
+        return "\n".join(b.text for b in final.content if hasattr(b, "text"))

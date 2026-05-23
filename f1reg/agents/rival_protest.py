@@ -68,13 +68,13 @@ class RivalProtestAgent(BaseAgent):
             max_search_uses=5,
             progress_callback=progress_callback,
         )
-        # Strip anything before the first expected section heading.
-        # We anchor on "## 1." which is the first mandated heading; this
-        # survives web-search result text that may contain other headings.
-        m = re.search(r"^##\s+1\.", result, re.MULTILINE)
-        if not m:
-            # Fallback: strip before the first ## heading of any kind
-            m = re.search(r"^##\s", result, re.MULTILINE)
-        if m:
-            result = result[m.start():]
+        # Strip preamble before the first section heading.
+        # No line-start anchor (^) — text blocks from the API can be
+        # concatenated without a trailing newline, which would put "## 1."
+        # mid-line and cause an anchored regex to miss it entirely.
+        for pattern in (r"## 1\.", r"##\s+[Pp]rotest", r"##\s"):
+            m = re.search(pattern, result)
+            if m:
+                result = result[m.start():]
+                break
         return result
