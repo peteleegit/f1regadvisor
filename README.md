@@ -1,6 +1,6 @@
 # F1RegAdvisor
 
-Multi-agent AI system that assesses the regulatory risk of a Formula 1 technical concept and produces a structured risk memo with a bottom-line verdict, recommended action, and downloadable Word document.
+A demonstrator for multi-agent AI systems that assesses  regulatory risks and produces a structured risk memo with a bottom-line verdict, recommended action, and downloadable Word document.
 
 F1RegAdvisor has no regulatory knowledge of its own. It retrieves relevant rule text and Stewards decision precedents from the **FIARulerPro** knowledge substrate (via HTTP), then runs nine specialist AI agents — including an adversarial debate, a political economy analysis, and a rival protest simulation — to synthesise a verdict.
 
