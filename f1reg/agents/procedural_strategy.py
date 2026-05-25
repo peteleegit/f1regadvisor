@@ -69,6 +69,7 @@ class ProceduralStrategyOutput(BaseModel):
 
 
 class ProceduralStrategyAgent(BaseAgent):
+    model: str = settings.fast_model
 
     def analyse(self, ctx: MemoContext, phase1_context: str) -> ProceduralStrategyOutput:
         msg = _USER.format(

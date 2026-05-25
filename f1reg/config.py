@@ -22,8 +22,9 @@ class Settings(BaseSettings):
     fiaruler_api_url: str = "http://localhost:8000"
     fiaruler_api_key: str = ""
 
+    fast_model:    str = "claude-haiku-4-5-20251001"
     primary_model: str = "claude-sonnet-4-6"
-    senior_model: str = "claude-opus-4-7"
+    senior_model:  str = "claude-opus-4-7"
     verdict_model: str = "claude-opus-4-7"
 
     default_season: str = DEFAULT_SEASON

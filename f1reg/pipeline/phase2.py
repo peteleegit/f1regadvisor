@@ -104,7 +104,7 @@ def should_run_round3(ctx: MemoContext) -> bool:
     from f1reg.agents.base import _get_client
     client = _get_client()
     resp = client.messages.create(
-        model=settings.primary_model,
+        model=settings.fast_model,
         max_tokens=5,
         system="You are a debate moderator. Answer only 'yes' or 'no'.",
         messages=[{"role": "user", "content": prompt}],
