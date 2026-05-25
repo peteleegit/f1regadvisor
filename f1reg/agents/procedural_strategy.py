@@ -9,6 +9,7 @@ import json
 from pydantic import BaseModel
 
 from f1reg.agents.base import BaseAgent
+from f1reg.config import settings
 from f1reg.context import MemoContext
 
 _ACTION_OPTIONS = (
