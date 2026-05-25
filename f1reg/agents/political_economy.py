@@ -83,13 +83,16 @@ your assessment."""
 
 class PoliticalEconomyAgent(BaseAgent):
 
-    def analyse(self, concept: str, phase1_context: str) -> str:
+    def analyse(self, concept: str, phase1_context: str, *, web_search: bool = True) -> str:
         msg = _USER.format(concept=concept, phase1_context=phase1_context)
-        result = self._call_with_web_search(
-            _SYSTEM,
-            [{"role": "user", "content": msg}],
-            max_search_uses=2,
-        )
+        if web_search:
+            result = self._call_with_web_search(
+                _SYSTEM,
+                [{"role": "user", "content": msg}],
+                max_search_uses=2,
+            )
+        else:
+            result = self._call(_SYSTEM, [{"role": "user", "content": msg}])
         m = _re.search(r"(?m)^##\s+1\b", result)
         if m:
             result = result[m.start():]

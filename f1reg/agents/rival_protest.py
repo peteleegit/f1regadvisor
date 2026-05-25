@@ -55,6 +55,8 @@ class RivalProtestAgent(BaseAgent):
         concept: str,
         phase1_context: str,
         transcript: str,
+        *,
+        web_search: bool = True,
         progress_callback=None,
     ) -> str:
         msg = _USER.format(
@@ -62,12 +64,15 @@ class RivalProtestAgent(BaseAgent):
             phase1_context=phase1_context,
             transcript=transcript,
         )
-        result = self._call_with_web_search(
-            _SYSTEM,
-            [{"role": "user", "content": msg}],
-            max_search_uses=2,
-            progress_callback=progress_callback,
-        )
+        if web_search:
+            result = self._call_with_web_search(
+                _SYSTEM,
+                [{"role": "user", "content": msg}],
+                max_search_uses=2,
+                progress_callback=progress_callback,
+            )
+        else:
+            result = self._call(_SYSTEM, [{"role": "user", "content": msg}])
         # Claude sometimes writes preamble before the structured sections
         # despite the system prompt.  Strip everything before "## 1." so the
         # memo only contains the six structured sections.
