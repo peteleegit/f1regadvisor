@@ -9,6 +9,7 @@ parallel via ThreadPoolExecutor.
 """
 from __future__ import annotations
 
+import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Optional
 
@@ -142,9 +143,11 @@ def run_phase1(
     if progress_callback:
         progress_callback("Retrieving regulations and precedents from FIARulerPro...")
 
+    _t0 = time.time()
     reg_hits, prec_hits = _retrieve_via_api(
         ctx.concept, regulation_limit=rl, precedent_limit=pl
     )
+    print(f"[timing] phase1 retrieval (FIARulerPro /retrieve): {time.time()-_t0:.1f}s", flush=True)
 
     # Expansion hits (rrf_score=0.0) bypass the regulation_limit cap on the
     # FIARulerPro side. With 5-6 queries and active graph expansion the total
@@ -184,11 +187,13 @@ def run_phase1(
     def _run_prec():
         return PrecedentAgent().analyse(concept_summary, precedent_text)
 
+    _t1 = time.time()
     with ThreadPoolExecutor(max_workers=2) as pool:
         reg_future = pool.submit(_run_reg)
         prec_future = pool.submit(_run_prec)
         reg_output = reg_future.result()
         prec_output = prec_future.result()
+    print(f"[timing] phase1 synthesis (RegulatoryText+Precedent parallel): {time.time()-_t1:.1f}s", flush=True)
 
     ctx.regulatory_text_output = reg_output
     ctx.precedent_output = prec_output
