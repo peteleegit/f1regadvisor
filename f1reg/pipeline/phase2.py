@@ -97,8 +97,10 @@ def should_run_round3(ctx: MemoContext) -> bool:
     prompt = (
         f"FIA Skeptic Round 2:\n{sk}\n\n"
         f"Defence Round 2:\n{df}\n\n"
-        "Does this debate contain a significant unresolved legal or factual dispute "
-        "that a third rebuttal round would meaningfully resolve? "
+        "Answer yes ONLY IF both of the following are true:\n"
+        "1. One side made a specific factual or legal claim that the other side did not address at all (not merely disagreed with).\n"
+        "2. Resolving that claim would materially change whether the concept should be approved or rejected.\n"
+        "If the debate is merely repetitive, stylistically opposed, or concerns minor points, answer no.\n"
         "Answer with exactly one word: yes or no."
     )
     from f1reg.agents.base import _get_client
@@ -106,7 +108,7 @@ def should_run_round3(ctx: MemoContext) -> bool:
     resp = client.messages.create(
         model=settings.fast_model,
         max_tokens=5,
-        system="You are a debate moderator. Answer only 'yes' or 'no'.",
+        system="You are a strict debate moderator. Default to 'no'. Answer only 'yes' or 'no'.",
         messages=[{"role": "user", "content": prompt}],
     )
     text = "".join(b.text for b in resp.content if hasattr(b, "text")).strip().lower()
