@@ -65,7 +65,7 @@ class RivalProtestAgent(BaseAgent):
         result = self._call_with_web_search(
             _SYSTEM,
             [{"role": "user", "content": msg}],
-            max_search_uses=5,
+            max_search_uses=2,
             progress_callback=progress_callback,
         )
         # Claude sometimes writes preamble before the structured sections

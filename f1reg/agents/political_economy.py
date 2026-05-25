@@ -88,7 +88,7 @@ class PoliticalEconomyAgent(BaseAgent):
         result = self._call_with_web_search(
             _SYSTEM,
             [{"role": "user", "content": msg}],
-            max_search_uses=5,
+            max_search_uses=2,
         )
         m = _re.search(r"(?m)^##\s+1\b", result)
         if m:
