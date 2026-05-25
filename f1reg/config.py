@@ -24,6 +24,7 @@ class Settings(BaseSettings):
 
     primary_model: str = "claude-sonnet-4-6"
     senior_model: str = "claude-opus-4-7"
+    verdict_model: str = "claude-opus-4-7"
 
     default_season: str = DEFAULT_SEASON
 
@@ -34,6 +35,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_prefix="F1REG_",
         case_sensitive=False,
+        extra="ignore",
     )
 
 

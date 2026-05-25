@@ -146,7 +146,7 @@ class BottomLineOutput(BaseModel):
 
 
 class BottomLineAgent(BaseAgent):
-    model: str = settings.senior_model
+    model: str = settings.verdict_model
 
     def synthesise(self, ctx: MemoContext) -> BottomLineOutput:
         audit_text = _format_audit(ctx.audit_findings)
