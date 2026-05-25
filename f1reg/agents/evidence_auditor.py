@@ -54,7 +54,7 @@ REGULATORY ANALYSIS:
 PRECEDENT ANALYSIS:
 {precedent_summary}
 
-DEBATE TRANSCRIPT:
+DEBATE (final round only — earlier rounds omitted for brevity):
 {debate_transcript}
 
 POLITICAL ECONOMY ANALYSIS:
@@ -76,12 +76,24 @@ class EvidenceAuditorAgent(BaseAgent):
     model: str = settings.senior_model
 
     def audit(self, ctx: MemoContext) -> list[AuditFinding]:
+        if ctx.debate_rounds:
+            r = ctx.debate_rounds[-1]
+            _labels = {1: "Round 1", 2: "Round 2 (Rebuttals)", 3: "Round 3 (Closing)"}
+            label = _labels.get(r.round_number, f"Round {r.round_number}")
+            debate_excerpt = (
+                f"### {label} of {len(ctx.debate_rounds)}\n\n"
+                f"**FIA Skeptic:**\n{r.skeptic_argument}\n\n"
+                f"**Liberal Construction / Defence:**\n{r.defense_argument}"
+            )
+        else:
+            debate_excerpt = "(not available)"
+
         msg = _USER.format(
             concept=ctx.concept.summary,
             season=ctx.concept.season,
             regulatory_summary=ctx.regulatory_summary or "(not available)",
             precedent_summary=ctx.precedent_summary or "(not available)",
-            debate_transcript=ctx.debate_transcript(),
+            debate_transcript=debate_excerpt,
             political_economy=ctx.political_economy_analysis or "(not available)",
             rival_protest=ctx.rival_protest_analysis or "(not available)",
             recommended_action=ctx.recommended_action or "(not available)",
