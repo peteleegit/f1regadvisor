@@ -29,7 +29,9 @@ def _make_http_client():
     import httpx
     import truststore
     ctx = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-    return httpx.Client(verify=ctx)
+    # 120s read timeout: long enough for large Opus calls, short enough to
+    # fail fast rather than hanging for the SDK default of 600s.
+    return httpx.Client(verify=ctx, timeout=httpx.Timeout(120.0))
 
 
 class BaseAgent:

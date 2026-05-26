@@ -1,8 +1,8 @@
 """Evidence Auditor — Phase 4.
 
-Reviews all agent outputs for quality issues.  Uses claude-opus-4-7 for
-deeper cross-agent reasoning.  HIGH severity findings are flagged prominently
-in the memo; LOW severity findings are added to Open Questions.
+Reviews all agent outputs for quality issues.  Uses primary_model (Sonnet)
+on a trimmed input (final debate round only).  HIGH severity findings are
+flagged prominently in the memo; LOW severity findings are added to Open Questions.
 """
 from __future__ import annotations
 
@@ -73,7 +73,7 @@ Audit the above for quality issues."""
 
 
 class EvidenceAuditorAgent(BaseAgent):
-    model: str = settings.senior_model
+    model: str = settings.primary_model
 
     def audit(self, ctx: MemoContext) -> list[AuditFinding]:
         if ctx.debate_rounds:
