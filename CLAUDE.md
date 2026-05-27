@@ -34,7 +34,7 @@ Phase 2    FIASkepticAgent             builds strongest case for violation
            PoliticalEconomyAgent       (parallel, web search) FIA actors, rival posture, reactive rule risk
 Phase 2.5  RivalProtestAgent           (web search) simulates rival constructor's protest strategy
 Phase 3    ProceduralStrategyAgent     recommended action + mitigations
-Phase 4    EvidenceAuditorAgent        (claude-opus-4-7) cross-agent quality control
+Phase 4    EvidenceAuditorAgent        cross-agent quality control
 Phase 5    BottomLineAgent             (claude-opus-4-7) two-track verdict: legal standing + enforcement risk
 ```
 
@@ -46,11 +46,13 @@ Phase 2 (debate) may run a Round 3 if `should_run_round3()` (a lightweight Claud
 
 ### Agent model split
 
-Most agents use `F1REG_PRIMARY_MODEL` (default `claude-sonnet-4-6`). `EvidenceAuditorAgent` and `BottomLineAgent` use `F1REG_SENIOR_MODEL` (default `claude-opus-4-7`) — these are the two highest-stakes reasoning steps and this is intentional.
+Most agents use `F1REG_PRIMARY_MODEL` (default `claude-sonnet-4-6`), including `EvidenceAuditorAgent`. `BottomLineAgent` uses `F1REG_VERDICT_MODEL` (default `claude-opus-4-7`) — the final verdict is the one step where the senior model is kept. `F1REG_SENIOR_MODEL` is defined in config but currently unused by any agent.
 
 ### Web search agents
 
-`PoliticalEconomyAgent` and `RivalProtestAgent` call `_call_with_web_search()` from `base.py`, which uses Anthropic's `web_search_20250305` tool (up to 5 searches per call). Domain allowlist is in `f1reg/config.py` as `WEB_SEARCH_DOMAINS`.
+`PoliticalEconomyAgent` and `RivalProtestAgent` call `_call_with_web_search()` from `base.py`, which uses Anthropic's `web_search_20250305` tool (up to 2 searches per call, `max_search_uses=2`). Domain allowlist is in `f1reg/config.py` as `WEB_SEARCH_DOMAINS`.
+
+Both agents accept a `web_search: bool = True` kwarg. When `False`, they call `_call()` instead, skipping web search entirely. F1 Ruler exposes this as a toggle in the intake modal ("Search the web for the latest media and political F1 news?") that defaults to off.
 
 **Critical:** Both agents strip preamble from web-search results using `re.search(r'(?m)^##\s+1\b', result)` and demote `## ` headings to `#### `. If you add a new agent using `_call_with_web_search`, apply the same pattern — Claude often emits thinking-aloud text before its structured output.
 
