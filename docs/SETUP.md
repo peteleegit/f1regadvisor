@@ -91,8 +91,8 @@ If `FIARULER_REF_TOKEN` is set on this service and matches the `?ref=<token>` pa
 
 **To enable the full integration:**
 
-1. Set `FIARULER_REF_TOKEN` on the F1RegAdvisor Railway service.
-2. Set `F1REGADVISOR_URL` (this service's public URL) and `F1REGADVISOR_REF_TOKEN` (the same token value) on the FIARulerPro Railway service.
+1. Set `FIARULER_REF_TOKEN` on the F1RegAdvisor service.
+2. Set `F1REGADVISOR_URL` (this service's public URL) and `F1REGADVISOR_REF_TOKEN` (the same token value) on the FIARulerPro service.
 
 **Local `secrets.toml` example** (add `ref_token` under the existing `[fiaruler]` section):
 
@@ -118,42 +118,6 @@ pytest --cov=f1reg --cov-report=term-missing
 
 ---
 
-## Railway Deployment
-
-F1RegAdvisor is deployed as a separate Railway service in the **same Railway project** as FIARulerPro. Services in the same project share a private network, which is how F1RegAdvisor reaches FIARulerPro at `localhost:8000` without going over the public internet.
-
-### First-time setup
-
-1. Create a new Railway service in the **fiaruler-pro project** (not a separate project).
-2. Connect the service to this GitHub repo and select the **Dockerfile** builder.
-3. Set environment variables in Railway:
-
-| Variable | Value |
-|---|---|
-| `ANTHROPIC_API_KEY` | `sk-ant-...` |
-| `APP_PASSWORD` | Login password for the UI |
-| `F1REG_FIARULER_API_URL` | `http://localhost:8000` |
-| `F1REG_FIARULER_API_KEY` | Must match `FIARULER_RETRIEVE_API_KEY` on the fiaruler-pro service |
-| `PORT` | `8501` |
-| `FIARULER_REF_TOKEN` | Shared secret that FIARulerPro includes in referral links (`?ref=<token>`). If it matches, the F1RegAdvisor login screen is bypassed. Must match `F1REGADVISOR_REF_TOKEN` on fiaruler-pro. Optional. |
-
-4. Deploy. Railway builds the Docker image and starts `start.sh`.
-
-### How startup works
-
-`start.sh` runs at container start:
-
-1. Creates `/app/.streamlit/secrets.toml` from the environment variables above.
-2. Launches `streamlit run app.py` on `$PORT`.
-
-There is no database download or warm-up step — F1RegAdvisor is stateless between sessions.
-
-### Updating the app (code changes)
-
-Push to `main`. Railway detects the push and automatically rebuilds and redeploys the service. The rebuild takes 2–3 minutes (pip install + Docker layer caching).
-
----
-
 ## Configuration Reference
 
 ### Application settings (`F1REG_` prefix, or `.env` file)
@@ -169,17 +133,6 @@ Push to `main`. Railway detects the push and automatically rebuilds and redeploy
 | `F1REG_PRECEDENT_LIMIT` | `8` | Max precedent hits per retrieval call |
 
 Streamlit secrets (`.streamlit/secrets.toml`) override `F1REG_FIARULER_API_URL` and `F1REG_FIARULER_API_KEY` when the app runs under Streamlit. Set both for safety.
-
-### Railway-specific variables
-
-| Variable | Description |
-|---|---|
-| `ANTHROPIC_API_KEY` | Claude API key (injected into secrets.toml by start.sh) |
-| `APP_PASSWORD` | UI login password |
-| `F1REG_FIARULER_API_URL` | FIARulerPro private network URL |
-| `F1REG_FIARULER_API_KEY` | Retrieve bearer token |
-| `PORT` | Streamlit port (set to `8501`) |
-| `FIARULER_REF_TOKEN` | Login bypass token for FIARulerPro referral links (optional). |
 
 ---
 

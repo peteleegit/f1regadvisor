@@ -27,7 +27,7 @@ It is deliberately minimal:
 **Current:** Single shared password (`APP_PASSWORD`) checked in `app.py`. No session expiry, no user identity, no record of who ran which assessment.
 
 **Production change:**
-- Replace the password gate with individual accounts — SSO via Azure AD is the appropriate choice for an internal tool.
+- Replace the password gate with individual accounts — SSO would be the appropriate choice for an internal tool.
 - Use `msal` (already available) to implement a device-code or redirect flow.
 - Add a `user_id` to the memo context so assessments are attributable.
 - Log each assessment to a database keyed by user, concept, season, and timestamp.
